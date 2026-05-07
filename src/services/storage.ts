@@ -2,6 +2,8 @@ import { EndapProject } from '../types/endap';
 
 const PROJECT_STORAGE_KEY = 'endap-studio:project';
 const SETTINGS_STORAGE_KEY = 'endap-studio:settings';
+const SNAPSHOTS_STORAGE_KEY = 'endap-studio:snapshots';
+const MAX_SNAPSHOTS = 12;
 
 export type StudioSettings = {
   apiMode: 'mock' | 'gateway';
@@ -15,6 +17,13 @@ export const defaultStudioSettings: StudioSettings = {
   gatewayBaseUrl: 'http://192.168.4.1',
   theme: 'dark',
   autoSave: true
+};
+
+export type StudioProjectSnapshot = {
+  id: string;
+  name: string;
+  createdAt: string;
+  project: EndapProject;
 };
 
 export function saveProjectToStorage(project: EndapProject): void {
@@ -41,6 +50,41 @@ export function loadProjectFromStorage(): EndapProject | null {
 
 export function clearStoredProject(): void {
   window.localStorage.removeItem(PROJECT_STORAGE_KEY);
+}
+
+export function loadProjectSnapshots(): StudioProjectSnapshot[] {
+  const rawSnapshots = window.localStorage.getItem(SNAPSHOTS_STORAGE_KEY);
+  if (!rawSnapshots) return [];
+
+  try {
+    const parsedSnapshots = JSON.parse(rawSnapshots) as unknown;
+    if (!Array.isArray(parsedSnapshots)) return [];
+    return parsedSnapshots.filter(isProjectSnapshotShape);
+  } catch {
+    window.localStorage.removeItem(SNAPSHOTS_STORAGE_KEY);
+    return [];
+  }
+}
+
+export function saveProjectSnapshot(project: EndapProject, name?: string): StudioProjectSnapshot {
+  const snapshots = loadProjectSnapshots();
+  const snapshot: StudioProjectSnapshot = {
+    id: `snapshot-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: name?.trim() || `${project.name} snapshot`,
+    createdAt: new Date().toISOString(),
+    project: {
+      ...project,
+      updatedAt: new Date().toISOString()
+    }
+  };
+
+  window.localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify([snapshot, ...snapshots].slice(0, MAX_SNAPSHOTS)));
+  return snapshot;
+}
+
+export function deleteProjectSnapshot(id: string): void {
+  const snapshots = loadProjectSnapshots().filter((snapshot) => snapshot.id !== id);
+  window.localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(snapshots));
 }
 
 export function saveStudioSettings(settings: StudioSettings): void {
@@ -115,4 +159,14 @@ function isEndapProjectShape(value: unknown): value is EndapProject {
   if (!Array.isArray(ladderProgram.rungs)) return false;
 
   return ladderProgram.rungs.every((rung) => isRecord(rung) && typeof rung.id === 'string' && Array.isArray(rung.blocks));
+}
+
+function isProjectSnapshotShape(value: unknown): value is StudioProjectSnapshot {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.createdAt === 'string' &&
+    isEndapProjectShape(value.project)
+  );
 }

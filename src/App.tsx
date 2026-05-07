@@ -3,6 +3,7 @@ import { FieldPanels } from './components/FieldPanels';
 import { GatewayContract } from './components/GatewayContract';
 import { ProjectHealthPanel, ProjectIssue } from './components/ProjectHealthPanel';
 import { RuntimeTimeline } from './components/RuntimeTimeline';
+import { SnapshotPanel } from './components/SnapshotPanel';
 import { WatchItem, WatchTable } from './components/WatchTable';
 import { getMockProject } from './services/mockEndapApi';
 import {
@@ -32,10 +33,14 @@ import {
   clearStoredProject,
   downloadProjectBackup,
   importProjectFromFile,
+  deleteProjectSnapshot,
   loadStudioSettings,
+  loadProjectSnapshots,
   loadProjectFromStorage,
+  saveProjectSnapshot,
   saveProjectToStorage,
   saveStudioSettings,
+  StudioProjectSnapshot,
   StudioSettings
 } from './services/storage';
 import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from './types/endap';
@@ -240,6 +245,7 @@ function App() {
   const [forceState, setForceState] = useState<ForceState>({});
   const [settings, setSettings] = useState<StudioSettings>(() => loadStudioSettings());
   const [activeNavItem, setActiveNavItem] = useState<NavItem>('Ladder');
+  const [snapshots, setSnapshots] = useState<StudioProjectSnapshot[]>(() => loadProjectSnapshots());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const runtimeModeReadyRef = useRef(false);
   const memoryMapRef = useRef<MemoryMap>({});
@@ -757,6 +763,32 @@ function App() {
     createRuntimeInfoEvent('project.changed', 'studio-project', `Projeto exportado: ${project.name}`);
   }
 
+  function createSnapshot() {
+    if (!project) return;
+    const snapshot = saveProjectSnapshot(project, `${project.name} · ${new Date().toLocaleString('pt-BR')}`);
+    setSnapshots(loadProjectSnapshots());
+    createRuntimeInfoEvent('project.changed', 'studio-snapshot', `Snapshot salvo: ${snapshot.name}`);
+  }
+
+  function restoreSnapshot(snapshot: StudioProjectSnapshot) {
+    const restoredProject = { ...snapshot.project, updatedAt: new Date().toISOString() };
+    setRuntimeMode('STOP');
+    setScanCount(0);
+    setMemoryMap({});
+    setForceState({});
+    setProject(restoredProject);
+    setSelectedRungId(restoredProject.ladderProgram.rungs[0]?.id ?? null);
+    setSelectedBlockId(restoredProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+    setStorageStatus('Snapshot restaurado');
+    createRuntimeWarningEvent('project.changed', 'studio-snapshot', `Snapshot restaurado: ${snapshot.name}`);
+  }
+
+  function removeSnapshot(id: string) {
+    deleteProjectSnapshot(id);
+    setSnapshots(loadProjectSnapshots());
+    createRuntimeInfoEvent('project.changed', 'studio-snapshot', 'Snapshot local removido');
+  }
+
   function toggleRuntimeMode() {
     setRuntimeMode((current) => (current === 'RUN' ? 'STOP' : 'RUN'));
   }
@@ -1146,6 +1178,15 @@ function App() {
           <div id="gateway-section">
             <GatewayContract settings={settings} onSettingsChange={updateSettings} onGatewayResult={handleGatewayResult} />
           </div>
+        </section>
+
+        <section className="snapshot-layout" aria-label="Snapshots e versões locais">
+          <SnapshotPanel
+            snapshots={snapshots}
+            onCreateSnapshot={createSnapshot}
+            onDeleteSnapshot={removeSnapshot}
+            onRestoreSnapshot={restoreSnapshot}
+          />
         </section>
 
         <FieldPanels

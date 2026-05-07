@@ -12,6 +12,7 @@
 - Painel Gateway / Firmware Contract com modo mock/gateway, base URL, endpoints previstos, status e teste de conexão.
 - Painel de validação local com falhas, avisos e itens informativos antes de exportar ou integrar gateway.
 - Painéis locais de I/O, nós, fail-safe e diagnóstico, com toggles mockados para estado/manual/teste de I/O.
+- Snapshots locais versionados para salvar, restaurar e remover marcos do projeto sem cloud.
 - Settings locais persistidos em `localStorage`: modo API, base URL, tema preparado e auto-save.
 
 ## Ladder editor
@@ -46,6 +47,7 @@
 ## Persistência
 
 - Projeto salvo em `localStorage` quando auto-save está ligado.
+- Até 12 snapshots locais são mantidos em `localStorage`.
 - Import/export `.endap.json` preservado.
 - Import valida campos mínimos antes de aplicar o projeto:
   - `id`

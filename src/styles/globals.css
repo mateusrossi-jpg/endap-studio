@@ -746,6 +746,7 @@ h2 {
 .timeline-panel,
 .health-panel,
 .gateway-panel,
+.snapshot-panel,
 .field-panel {
   border: 1px solid var(--line);
   border-radius: 26px;
@@ -931,6 +932,36 @@ h2 {
   font-weight: 900;
 }
 
+.snapshot-layout {
+  margin-top: 14px;
+}
+
+.snapshot-list {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.snapshot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(110, 231, 221, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 34, 38, 0.72);
+}
+
+.snapshot-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .field-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(220px, 0.7fr));
@@ -1100,6 +1131,7 @@ h2 {
   .property-actions.three,
   .watch-row,
   .io-row,
+  .snapshot-row,
   .field-layout,
   .timeline-row,
   .settings-grid {
