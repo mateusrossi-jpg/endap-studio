@@ -11,6 +11,8 @@ import { EndapLadderBlock, EndapLadderBlockKind, EndapProject } from './types/en
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 
+type RuntimeMode = 'STOP' | 'RUN';
+
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
   return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
@@ -93,6 +95,8 @@ function App() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [selectedRungId, setSelectedRungId] = useState<string | null>(null);
   const [storageStatus, setStorageStatus] = useState('Carregando projeto local...');
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('STOP');
+  const [scanCount, setScanCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -117,8 +121,17 @@ function App() {
   useEffect(() => {
     if (!project) return;
     saveProjectToStorage(project);
-    setStorageStatus('Salvo localmente');
-  }, [project]);
+    setStorageStatus(runtimeMode === 'RUN' ? 'RUN ativo — salvando localmente' : 'Salvo localmente');
+  }, [project, runtimeMode]);
+
+  useEffect(() => {
+    if (runtimeMode !== 'RUN') return;
+    const interval = window.setInterval(() => {
+      runScanSimulation('auto');
+    }, 600);
+
+    return () => window.clearInterval(interval);
+  }, [runtimeMode]);
 
   const selectedBlock = useMemo(() => {
     if (!project || !selectedBlockId) return null;
@@ -234,7 +247,7 @@ function App() {
     });
   }
 
-  function runScanSimulation() {
+  function runScanSimulation(mode: 'manual' | 'auto' = 'manual') {
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => ({
@@ -252,10 +265,13 @@ function App() {
         }
       };
     });
-    setStorageStatus('Scan simulado executado');
+    setScanCount((current) => current + 1);
+    setStorageStatus(mode === 'auto' ? 'RUN executando scans' : 'STEP executado');
   }
 
   function resetProject() {
+    setRuntimeMode('STOP');
+    setScanCount(0);
     clearStoredProject();
     getMockProject().then((loadedProject) => {
       const refreshedProject = { ...loadedProject, updatedAt: new Date().toISOString() };
@@ -272,6 +288,7 @@ function App() {
 
     try {
       const importedProject = await importProjectFromFile(file);
+      setRuntimeMode('STOP');
       setProject({ ...importedProject, updatedAt: new Date().toISOString() });
       setSelectedRungId(importedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(importedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
@@ -333,9 +350,9 @@ function App() {
             <p className="eyebrow">Editor Escada / Automação ENDAP</p>
             <h1>Ladder touch-first para campo</h1>
           </div>
-          <div className="connection-pill">
+          <div className={`connection-pill ${runtimeMode === 'RUN' ? 'runtime-run' : ''}`}>
             <span className="pulse" />
-            {storageStatus}
+            {runtimeMode} · {storageStatus}
           </div>
         </header>
 
@@ -348,7 +365,7 @@ function App() {
           <article className="metric-card">
             <span>Scan</span>
             <strong>{project.ladderProgram.scanTimeMs} ms</strong>
-            <small>simulação local</small>
+            <small>{scanCount} ciclos simulados</small>
           </article>
           <article className="metric-card warning">
             <span>Alertas</span>
@@ -368,7 +385,10 @@ function App() {
           <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
           <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
-          <button type="button" onClick={runScanSimulation}>Simular scan</button>
+          <button type="button" onClick={() => setRuntimeMode((current) => (current === 'RUN' ? 'STOP' : 'RUN'))}>
+            {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
+          </button>
+          <button type="button" onClick={() => runScanSimulation('manual')}>STEP</button>
           <button type="button" onClick={() => downloadProjectBackup(project)}>Exportar</button>
           <button type="button" onClick={() => fileInputRef.current?.click()}>Importar</button>
           <button type="button" onClick={resetProject}>Resetar</button>
@@ -382,7 +402,7 @@ function App() {
                 <p className="eyebrow">Programa principal</p>
                 <h2>{project.ladderProgram.name}</h2>
               </div>
-              <span className="status-badge">Modo {project.ladderProgram.mode}</span>
+              <span className={`status-badge ${runtimeMode === 'RUN' ? 'runtime-run' : ''}`}>Runtime {runtimeMode}</span>
             </div>
 
             <div className="rung-list">
