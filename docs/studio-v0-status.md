@@ -22,6 +22,7 @@
 - Rungs podem ser renomeadas, descritas, reordenadas e removidas.
 - Blocos podem ser duplicados, movidos para esquerda/direita e removidos.
 - Undo/redo em memória para alterações de edição da sessão.
+- Atalhos locais para undo/redo, STEP e RUN/STOP quando o foco não está em campos de edição.
 - Blocos suportados:
   - `contact-no`
   - `contact-nc`

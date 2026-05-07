@@ -350,6 +350,42 @@ function App() {
     [forceState, memoryMap, project, settings]
   );
 
+  useEffect(() => {
+    function handleKeyboard(event: KeyboardEvent) {
+      const target = event.target;
+      const tagName = target instanceof HTMLElement ? target.tagName : '';
+      const isEditingText = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName);
+      if (isEditingText) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redoProjectChange();
+        else undoProjectChange();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redoProjectChange();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        runScanSimulation('manual');
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.code === 'Space') {
+        event.preventDefault();
+        toggleRuntimeMode();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyboard);
+    return () => window.removeEventListener('keydown', handleKeyboard);
+  }, [project, redoStack, runtimeMode, undoStack]);
+
   function recordUndo(label: string) {
     if (!project) return;
     setUndoStack((current) => [createHistoryEntry(project, label), ...current].slice(0, MAX_UNDO_HISTORY));
