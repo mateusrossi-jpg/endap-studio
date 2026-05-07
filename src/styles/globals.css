@@ -36,14 +36,26 @@ body {
     var(--bg);
 }
 
-button {
+button,
+input {
   font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
+}
+
+.loading-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
 }
 
 .sidebar {
@@ -67,6 +79,10 @@ button {
   box-shadow: var(--shadow);
 }
 
+.brand-card.compact {
+  width: min(100%, 360px);
+}
+
 .brand-mark {
   display: grid;
   width: 44px;
@@ -87,7 +103,8 @@ button {
 .eyebrow,
 .metric-card span,
 .metric-card small,
-.rung-meta small {
+.rung-meta small,
+.empty-copy {
   color: var(--muted);
 }
 
@@ -223,7 +240,15 @@ h2 {
   background: linear-gradient(135deg, rgba(40, 214, 196, 0.24), rgba(16, 39, 43, 0.96));
 }
 
-.ladder-panel {
+.editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+
+.ladder-panel,
+.property-panel {
   border: 1px solid var(--line);
   border-radius: 26px;
   background: rgba(11, 25, 28, 0.92);
@@ -231,7 +256,8 @@ h2 {
   overflow: hidden;
 }
 
-.ladder-header {
+.ladder-header,
+.property-header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -239,6 +265,10 @@ h2 {
   padding: 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(19, 43, 48, 0.72);
+}
+
+.property-header {
+  display: block;
 }
 
 .rung-list {
@@ -339,11 +369,19 @@ h2 {
   background: linear-gradient(135deg, rgba(70, 230, 134, 0.22), rgba(16, 39, 43, 0.96));
 }
 
+.ladder-block.is-selected {
+  outline: 3px solid rgba(40, 214, 196, 0.64);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px rgba(40, 214, 196, 0.08), 0 18px 38px rgba(0, 0, 0, 0.32);
+}
+
 .ladder-block.coil {
   border-color: rgba(40, 214, 196, 0.46);
 }
 
-.ladder-block.timer {
+.ladder-block.timer,
+.ladder-block.timer-ton,
+.ladder-block.timer-tof {
   border-color: rgba(255, 202, 95, 0.46);
 }
 
@@ -351,6 +389,72 @@ h2 {
   color: var(--cyan);
   font-weight: 900;
   letter-spacing: 0.06em;
+}
+
+.property-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.property-list {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.property-list label {
+  display: grid;
+  gap: 7px;
+}
+
+.property-list label span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.property-list input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(110, 231, 221, 0.18);
+  border-radius: 14px;
+  background: rgba(7, 17, 19, 0.74);
+  color: var(--text);
+  padding: 0 12px;
+}
+
+.property-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.property-actions button {
+  min-height: 44px;
+  border: 1px solid rgba(40, 214, 196, 0.36);
+  border-radius: 14px;
+  background: rgba(40, 214, 196, 0.14);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.empty-copy {
+  margin: 0;
+  padding: 16px;
+}
+
+@media (max-width: 1180px) {
+  .editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .property-panel {
+    position: static;
+  }
 }
 
 @media (max-width: 920px) {
@@ -413,7 +517,8 @@ h2 {
     font-size: 1.25rem;
   }
 
-  .ladder-panel {
+  .ladder-panel,
+  .property-panel {
     border-radius: 20px;
   }
 
@@ -423,5 +528,9 @@ h2 {
 
   .rung-card {
     padding: 10px;
+  }
+
+  .property-actions {
+    grid-template-columns: 1fr;
   }
 }
