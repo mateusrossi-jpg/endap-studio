@@ -102,7 +102,17 @@ export type EndapAutomationRule = {
   description?: string;
 };
 
-export type EndapLadderBlockKind = 'contact-no' | 'contact-nc' | 'timer-ton' | 'timer-tof' | 'counter' | 'coil';
+export type EndapLadderBlockKind =
+  | 'contact-no'
+  | 'contact-nc'
+  | 'memory-contact-no'
+  | 'memory-contact-nc'
+  | 'timer-ton'
+  | 'timer-tof'
+  | 'counter'
+  | 'coil'
+  | 'coil-set'
+  | 'coil-reset';
 
 export type EndapLadderBlock = {
   id: string;
