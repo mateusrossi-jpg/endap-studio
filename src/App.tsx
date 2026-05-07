@@ -49,9 +49,16 @@ import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'] as const;
 const AUTO_SCAN_INTERVAL_MS = 200;
 const STEP_SCAN_DELTA_MS = 100;
+const MAX_UNDO_HISTORY = 30;
 
 type RuntimeMode = 'STOP' | 'RUN';
 type NavItem = (typeof navItems)[number];
+type ProjectHistoryEntry = {
+  id: string;
+  label: string;
+  createdAt: string;
+  project: EndapProject;
+};
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
   return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
@@ -235,6 +242,15 @@ function sectionIdForNavItem(item: NavItem) {
   return sectionByItem[item];
 }
 
+function createHistoryEntry(project: EndapProject, label: string): ProjectHistoryEntry {
+  return {
+    id: `history-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    label,
+    createdAt: new Date().toISOString(),
+    project
+  };
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -247,6 +263,8 @@ function App() {
   const [settings, setSettings] = useState<StudioSettings>(() => loadStudioSettings());
   const [activeNavItem, setActiveNavItem] = useState<NavItem>('Ladder');
   const [snapshots, setSnapshots] = useState<StudioProjectSnapshot[]>(() => loadProjectSnapshots());
+  const [undoStack, setUndoStack] = useState<ProjectHistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<ProjectHistoryEntry[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const runtimeModeReadyRef = useRef(false);
   const memoryMapRef = useRef<MemoryMap>({});
@@ -332,6 +350,43 @@ function App() {
     [forceState, memoryMap, project, settings]
   );
 
+  function recordUndo(label: string) {
+    if (!project) return;
+    setUndoStack((current) => [createHistoryEntry(project, label), ...current].slice(0, MAX_UNDO_HISTORY));
+    setRedoStack([]);
+  }
+
+  function restoreProjectFromHistory(entry: ProjectHistoryEntry, direction: 'undo' | 'redo') {
+    if (!project) return;
+    const currentEntry = createHistoryEntry(project, direction === 'undo' ? 'Antes do undo' : 'Antes do redo');
+    if (direction === 'undo') {
+      setUndoStack((current) => current.slice(1));
+      setRedoStack((current) => [currentEntry, ...current].slice(0, MAX_UNDO_HISTORY));
+    } else {
+      setRedoStack((current) => current.slice(1));
+      setUndoStack((current) => [currentEntry, ...current].slice(0, MAX_UNDO_HISTORY));
+    }
+
+    setRuntimeMode('STOP');
+    setProject({ ...entry.project, updatedAt: new Date().toISOString() });
+    setSelectedRungId(entry.project.ladderProgram.rungs[0]?.id ?? null);
+    setSelectedBlockId(entry.project.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+    setStorageStatus(direction === 'undo' ? `Undo: ${entry.label}` : `Redo: ${entry.label}`);
+    createRuntimeInfoEvent('project.changed', 'history', direction === 'undo' ? `Undo aplicado: ${entry.label}` : `Redo aplicado: ${entry.label}`);
+  }
+
+  function undoProjectChange() {
+    const entry = undoStack[0];
+    if (!entry) return;
+    restoreProjectFromHistory(entry, 'undo');
+  }
+
+  function redoProjectChange() {
+    const entry = redoStack[0];
+    if (!entry) return;
+    restoreProjectFromHistory(entry, 'redo');
+  }
+
   function updateSelectedBlock(patch: Partial<EndapLadderBlock>) {
     if (!selectedBlockId) return;
 
@@ -359,6 +414,7 @@ function App() {
   }
 
   function addBlock(kind: EndapLadderBlockKind) {
+    recordUndo(`Adicionar ${kind}`);
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
@@ -383,6 +439,7 @@ function App() {
   }
 
   function addBranch() {
+    recordUndo('Adicionar branch OR');
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
@@ -431,6 +488,7 @@ function App() {
   }
 
   function addRung() {
+    recordUndo('Adicionar rung');
     const newBlock = createBlock('contact-no', (project?.ladderProgram.rungs.length ?? 0) + 10);
     const newRungId = `rung-${Date.now()}`;
 
@@ -461,6 +519,7 @@ function App() {
 
   function moveSelectedRung(direction: -1 | 1) {
     if (!selectedRungId) return;
+    recordUndo('Mover rung');
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const currentIndex = currentProject.ladderProgram.rungs.findIndex((rung) => rung.id === selectedRungId);
@@ -483,6 +542,7 @@ function App() {
 
   function deleteSelectedRung() {
     if (!selectedRungId) return;
+    recordUndo('Remover rung');
     setProject((currentProject) => {
       if (!currentProject || currentProject.ladderProgram.rungs.length <= 1) return currentProject;
       const nextRungs = currentProject.ladderProgram.rungs.filter((rung) => rung.id !== selectedRungId);
@@ -502,6 +562,7 @@ function App() {
 
   function duplicateSelectedBlock() {
     if (!selectedBlockId) return;
+    recordUndo('Duplicar bloco');
 
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
@@ -558,6 +619,7 @@ function App() {
 
   function moveSelectedBlock(direction: -1 | 1) {
     if (!selectedBlockId) return;
+    recordUndo('Mover bloco');
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
 
@@ -601,6 +663,7 @@ function App() {
 
   function deleteSelectedBlock() {
     if (!selectedBlockId) return;
+    recordUndo('Remover bloco');
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       let nextSelectedBlockId: string | null = null;
@@ -686,6 +749,7 @@ function App() {
   }
 
   function resetProject() {
+    recordUndo('Resetar projeto');
     setRuntimeMode('STOP');
     setScanCount(0);
     setMemoryMap({});
@@ -702,6 +766,7 @@ function App() {
   }
 
   function resetRuntimeState() {
+    recordUndo('Limpar runtime');
     setRuntimeMode('STOP');
     setScanCount(0);
     setMemoryMap({});
@@ -741,6 +806,7 @@ function App() {
 
     try {
       const importedProject = await importProjectFromFile(file);
+      recordUndo('Importar projeto');
       setRuntimeMode('STOP');
       setMemoryMap({});
       setForceState({});
@@ -772,6 +838,7 @@ function App() {
   }
 
   function restoreSnapshot(snapshot: StudioProjectSnapshot) {
+    recordUndo('Restaurar snapshot');
     const restoredProject = { ...snapshot.project, updatedAt: new Date().toISOString() };
     setRuntimeMode('STOP');
     setScanCount(0);
@@ -850,6 +917,7 @@ function App() {
   }
 
   function toggleIoPoint(id: string, field: 'state' | 'manualMode' | 'testMode') {
+    recordUndo(`Alterar I/O ${field}`);
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const nextProject = {
@@ -886,6 +954,7 @@ function App() {
   }
 
   function resetSelectedCounter() {
+    recordUndo('Resetar contador');
     updateSelectedBlock({ accumulatedCount: 0, previousInput: false, active: false });
   }
 
@@ -974,6 +1043,8 @@ function App() {
           <button type="button" onClick={() => addBlock('coil-reset')}>+ RESET</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
           <button type="button" onClick={() => addBlock('counter')}>+ CTU</button>
+          <button type="button" onClick={undoProjectChange} disabled={undoStack.length === 0}>Undo</button>
+          <button type="button" onClick={redoProjectChange} disabled={redoStack.length === 0}>Redo</button>
           <button type="button" onClick={toggleRuntimeMode}>
             {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
           </button>
@@ -1091,11 +1162,11 @@ function App() {
               <div className="rung-editor">
                 <label>
                   <span>Rung</span>
-                  <input value={selectedRung.title} onChange={(event) => updateSelectedRung({ title: event.target.value })} />
+                  <input value={selectedRung.title} onFocus={() => recordUndo('Editar rung')} onChange={(event) => updateSelectedRung({ title: event.target.value })} />
                 </label>
                 <label>
                   <span>Descrição</span>
-                  <input value={selectedRung.description} onChange={(event) => updateSelectedRung({ description: event.target.value })} />
+                  <input value={selectedRung.description} onFocus={() => recordUndo('Editar descrição da rung')} onChange={(event) => updateSelectedRung({ description: event.target.value })} />
                 </label>
                 <div className="property-actions three">
                   <button type="button" onClick={() => moveSelectedRung(-1)}>Subir</button>
@@ -1113,11 +1184,11 @@ function App() {
                 </label>
                 <label>
                   <span>Label</span>
-                  <input value={selectedBlock.label} onChange={(event) => updateSelectedBlock({ label: event.target.value })} />
+                  <input value={selectedBlock.label} onFocus={() => recordUndo('Editar bloco')} onChange={(event) => updateSelectedBlock({ label: event.target.value })} />
                 </label>
                 <label>
                   <span>Endereço</span>
-                  <input value={selectedBlock.address ?? ''} onChange={(event) => updateSelectedBlock({ address: event.target.value })} />
+                  <input value={selectedBlock.address ?? ''} onFocus={() => recordUndo('Editar endereço')} onChange={(event) => updateSelectedBlock({ address: event.target.value })} />
                 </label>
                 <label>
                   <span>Estado</span>
@@ -1133,13 +1204,13 @@ function App() {
                 </label>
                 <label>
                   <span>Preset ms</span>
-                  <input inputMode="numeric" value={selectedBlock.presetMs ?? ''} onChange={handlePresetChange} />
+                  <input inputMode="numeric" value={selectedBlock.presetMs ?? ''} onFocus={() => recordUndo('Editar preset')} onChange={handlePresetChange} />
                 </label>
                 {selectedBlock.kind === 'counter' && (
                   <>
                     <label>
                       <span>Preset contagem</span>
-                      <input inputMode="numeric" value={selectedBlock.presetCount ?? 1} onChange={handlePresetCountChange} />
+                      <input inputMode="numeric" value={selectedBlock.presetCount ?? 1} onFocus={() => recordUndo('Editar preset CTU')} onChange={handlePresetCountChange} />
                     </label>
                     <label>
                       <span>Acumulado</span>
@@ -1156,7 +1227,13 @@ function App() {
 
                 <div className="state-toggle">
                   <span>Simulação</span>
-                  <button type="button" onClick={() => updateSelectedBlock({ active: !selectedBlock.active })}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordUndo('Alternar bloco');
+                      updateSelectedBlock({ active: !selectedBlock.active });
+                    }}
+                  >
                     {selectedBlock.active ? 'Desenergizar' : 'Energizar'}
                   </button>
                 </div>

@@ -21,6 +21,7 @@
 - Editor Ladder mobile-first com rungs, seleção de bloco, edição de label/endereço/preset e duplicação.
 - Rungs podem ser renomeadas, descritas, reordenadas e removidas.
 - Blocos podem ser duplicados, movidos para esquerda/direita e removidos.
+- Undo/redo em memória para alterações de edição da sessão.
 - Blocos suportados:
   - `contact-no`
   - `contact-nc`

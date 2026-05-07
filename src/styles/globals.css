@@ -261,9 +261,15 @@ h2 {
 }
 
 .ladder-toolbar button:first-child,
-.ladder-toolbar button:nth-child(11) {
+.ladder-toolbar button:nth-child(13) {
   border-color: rgba(40, 214, 196, 0.52);
   background: linear-gradient(135deg, rgba(40, 214, 196, 0.24), rgba(16, 39, 43, 0.96));
+}
+
+.ladder-toolbar button:disabled,
+.panel-header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .editor-layout {
