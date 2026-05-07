@@ -1,56 +1,48 @@
-type LadderBlock = {
-  id: string;
-  label: string;
-  kind: 'contact-no' | 'contact-nc' | 'timer' | 'coil';
-  active?: boolean;
-};
-
-type LadderRung = {
-  id: string;
-  title: string;
-  description: string;
-  blocks: LadderBlock[];
-};
-
-const rungs: LadderRung[] = [
-  {
-    id: 'rung-001',
-    title: 'Partida da bomba',
-    description: 'Entrada digital aciona saída com contato NA.',
-    blocks: [
-      { id: 'i0', label: 'I0', kind: 'contact-no', active: true },
-      { id: 'q0', label: 'Q0', kind: 'coil', active: true }
-    ]
-  },
-  {
-    id: 'rung-002',
-    title: 'Intertravamento simples',
-    description: 'Contato NF bloqueia acionamento inseguro.',
-    blocks: [
-      { id: 'i1', label: 'I1', kind: 'contact-no', active: true },
-      { id: 'i2', label: 'I2', kind: 'contact-nc', active: false },
-      { id: 'q1', label: 'Q1', kind: 'coil', active: false }
-    ]
-  },
-  {
-    id: 'rung-003',
-    title: 'Retardo de acionamento',
-    description: 'Temporizador TON prepara saída após preset.',
-    blocks: [
-      { id: 'i3', label: 'I3', kind: 'contact-no', active: false },
-      { id: 't0', label: 'TON 5s', kind: 'timer', active: false },
-      { id: 'q2', label: 'Q2', kind: 'coil', active: false }
-    ]
-  }
-];
+import { useEffect, useState } from 'react';
+import { getMockProject } from './services/mockEndapApi';
+import { EndapLadderBlock, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 
-function blockClass(block: LadderBlock) {
-  return `ladder-block ${block.kind} ${block.active ? 'is-active' : ''}`;
+function blockClass(block: EndapLadderBlock) {
+  const cssKind = block.kind.replace('timer-', 'timer-');
+  return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''}`;
+}
+
+function blockSymbol(block: EndapLadderBlock) {
+  if (block.kind === 'contact-no') return '[ ]';
+  if (block.kind === 'contact-nc') return '[/]';
+  if (block.kind === 'timer-ton') return 'TON';
+  if (block.kind === 'timer-tof') return 'TOF';
+  if (block.kind === 'counter') return 'CTU';
+  return '( )';
 }
 
 function App() {
+  const [project, setProject] = useState<EndapProject | null>(null);
+
+  useEffect(() => {
+    getMockProject().then(setProject);
+  }, []);
+
+  if (!project) {
+    return (
+      <main className="loading-screen">
+        <div className="brand-card compact">
+          <span className="brand-mark">E</span>
+          <div>
+            <strong>ENDAP Studio</strong>
+            <small>Carregando projeto local...</small>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const onlineNodes = project.nodes.filter((node) => node.status === 'online').length;
+  const activeAlerts = project.alerts.filter((alert) => !alert.acknowledged).length;
+  const outputCount = project.io.filter((point) => point.direction === 'output').length;
+
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Navegação principal">
@@ -79,30 +71,30 @@ function App() {
           </div>
           <div className="connection-pill">
             <span className="pulse" />
-            Gateway mock online
+            {project.gateway.name} {project.gateway.status}
           </div>
         </header>
 
         <section className="status-grid" aria-label="Resumo operacional">
           <article className="metric-card">
             <span>Gateway</span>
-            <strong>Online</strong>
-            <small>192.168.4.1</small>
+            <strong>{project.gateway.status}</strong>
+            <small>{project.gateway.ipAddress}:{project.gateway.port}</small>
           </article>
           <article className="metric-card">
             <span>Scan</span>
-            <strong>4.2 ms</strong>
-            <small>sem overrun</small>
+            <strong>{project.ladderProgram.scanTimeMs} ms</strong>
+            <small>programa em {project.ladderProgram.mode}</small>
           </article>
           <article className="metric-card warning">
             <span>Alertas</span>
-            <strong>1 ativo</strong>
-            <small>nó pendente</small>
+            <strong>{activeAlerts} ativo</strong>
+            <small>{project.nodes.length - onlineNodes} nó fora do normal</small>
           </article>
           <article className="metric-card">
             <span>I/O</span>
-            <strong>8 pontos</strong>
-            <small>3 saídas</small>
+            <strong>{project.io.length} pontos</strong>
+            <small>{outputCount} saídas</small>
           </article>
         </section>
 
@@ -118,13 +110,13 @@ function App() {
           <div className="ladder-header">
             <div>
               <p className="eyebrow">Programa principal</p>
-              <h2>Controle local do gateway</h2>
+              <h2>{project.ladderProgram.name}</h2>
             </div>
-            <span className="status-badge">Modo mock</span>
+            <span className="status-badge">Modo {project.ladderProgram.mode}</span>
           </div>
 
           <div className="rung-list">
-            {rungs.map((rung, index) => (
+            {project.ladderProgram.rungs.map((rung, index) => (
               <article className="rung-card" key={rung.id}>
                 <div className="rung-meta">
                   <strong>Rung {index + 1}</strong>
@@ -140,12 +132,7 @@ function App() {
                   <div className="block-row">
                     {rung.blocks.map((block) => (
                       <button className={blockClass(block)} key={block.id} type="button">
-                        <span className="block-symbol">
-                          {block.kind === 'contact-no' && '[ ]'}
-                          {block.kind === 'contact-nc' && '[/]'}
-                          {block.kind === 'timer' && 'TON'}
-                          {block.kind === 'coil' && '( )'}
-                        </span>
+                        <span className="block-symbol">{blockSymbol(block)}</span>
                         <strong>{block.label}</strong>
                       </button>
                     ))}
