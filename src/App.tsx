@@ -10,6 +10,8 @@ import {
 import { EndapLadderBlock, EndapLadderBlockKind, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
+const AUTO_SCAN_INTERVAL_MS = 200;
+const STEP_SCAN_DELTA_MS = 100;
 
 type RuntimeMode = 'STOP' | 'RUN';
 
@@ -36,6 +38,11 @@ function blockKindLabel(block: EndapLadderBlock) {
   return 'Bobina de saída';
 }
 
+function timerProgress(block: EndapLadderBlock) {
+  if (!block.presetMs) return 0;
+  return Math.min(100, Math.round(((block.elapsedMs ?? 0) / block.presetMs) * 100));
+}
+
 function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
   const prefixByKind: Record<EndapLadderBlockKind, string> = {
     'contact-no': 'I',
@@ -54,11 +61,12 @@ function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBloc
     label,
     address: label,
     active: false,
-    presetMs: kind.startsWith('timer') ? 1000 : undefined
+    presetMs: kind.startsWith('timer') ? 1000 : undefined,
+    elapsedMs: kind.startsWith('timer') ? 0 : undefined
   };
 }
 
-function simulateBlocks(blocks: EndapLadderBlock[]): EndapLadderBlock[] {
+function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number): EndapLadderBlock[] {
   let power = true;
 
   return blocks.map((block) => {
@@ -72,7 +80,23 @@ function simulateBlocks(blocks: EndapLadderBlock[]): EndapLadderBlock[] {
       return block;
     }
 
-    if (block.kind === 'timer-ton' || block.kind === 'timer-tof' || block.kind === 'counter') {
+    if (block.kind === 'timer-ton') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
+      const active = elapsedMs >= presetMs;
+      power = power && active;
+      return { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'timer-tof') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
+      const active = power || elapsedMs < presetMs;
+      power = active;
+      return { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'counter') {
       const active = power;
       power = power && active;
       return { ...block, active };
@@ -127,8 +151,8 @@ function App() {
   useEffect(() => {
     if (runtimeMode !== 'RUN') return;
     const interval = window.setInterval(() => {
-      runScanSimulation('auto');
-    }, 600);
+      runScanSimulation('auto', AUTO_SCAN_INTERVAL_MS);
+    }, AUTO_SCAN_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
   }, [runtimeMode]);
@@ -247,12 +271,12 @@ function App() {
     });
   }
 
-  function runScanSimulation(mode: 'manual' | 'auto' = 'manual') {
+  function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => ({
         ...rung,
-        blocks: simulateBlocks(rung.blocks)
+        blocks: simulateBlocks(rung.blocks, deltaMs)
       }));
 
       return {
@@ -303,7 +327,7 @@ function App() {
   function handlePresetChange(event: ChangeEvent<HTMLInputElement>) {
     const rawValue = event.target.value;
     const presetMs = rawValue.trim() === '' ? undefined : Number(rawValue);
-    updateSelectedBlock({ presetMs: Number.isNaN(presetMs) ? undefined : presetMs });
+    updateSelectedBlock({ presetMs: Number.isNaN(presetMs) ? undefined : presetMs, elapsedMs: 0 });
   }
 
   if (!project) {
@@ -432,6 +456,14 @@ function App() {
                         >
                           <span className="block-symbol">{blockSymbol(block)}</span>
                           <strong>{block.label}</strong>
+                          {block.kind.startsWith('timer') && (
+                            <span className="timer-readout">
+                              ET {block.elapsedMs ?? 0} / PT {block.presetMs ?? 0} ms
+                              <span className="timer-track">
+                                <span className="timer-progress" style={{ width: `${timerProgress(block)}%` }} />
+                              </span>
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -464,6 +496,10 @@ function App() {
                 <label>
                   <span>Estado</span>
                   <input readOnly value={selectedBlock.active ? 'Ativo / Energizado' : 'Inativo'} />
+                </label>
+                <label>
+                  <span>Elapsed ms</span>
+                  <input readOnly value={selectedBlock.elapsedMs ?? 0} />
                 </label>
                 <label>
                   <span>Preset ms</span>
