@@ -111,6 +111,7 @@ export type EndapLadderBlock = {
   address?: string;
   active: boolean;
   presetMs?: number;
+  elapsedMs?: number;
 };
 
 export type EndapLadderRung = {
