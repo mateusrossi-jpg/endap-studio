@@ -56,6 +56,38 @@ function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBloc
   };
 }
 
+function simulateBlocks(blocks: EndapLadderBlock[]): EndapLadderBlock[] {
+  let power = true;
+
+  return blocks.map((block) => {
+    if (block.kind === 'contact-no') {
+      power = power && block.active;
+      return block;
+    }
+
+    if (block.kind === 'contact-nc') {
+      power = power && !block.active;
+      return block;
+    }
+
+    if (block.kind === 'timer-ton' || block.kind === 'timer-tof' || block.kind === 'counter') {
+      const active = power;
+      power = power && active;
+      return { ...block, active };
+    }
+
+    if (block.kind === 'coil') {
+      return { ...block, active: power };
+    }
+
+    return block;
+  });
+}
+
+function rungIsEnergized(blocks: EndapLadderBlock[]) {
+  return blocks.some((block) => block.kind === 'coil' && block.active);
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -202,6 +234,27 @@ function App() {
     });
   }
 
+  function runScanSimulation() {
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => ({
+        ...rung,
+        blocks: simulateBlocks(rung.blocks)
+      }));
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
+          rungs: simulatedRungs
+        }
+      };
+    });
+    setStorageStatus('Scan simulado executado');
+  }
+
   function resetProject() {
     clearStoredProject();
     getMockProject().then((loadedProject) => {
@@ -295,7 +348,7 @@ function App() {
           <article className="metric-card">
             <span>Scan</span>
             <strong>{project.ladderProgram.scanTimeMs} ms</strong>
-            <small>programa em {project.ladderProgram.mode}</small>
+            <small>simulação local</small>
           </article>
           <article className="metric-card warning">
             <span>Alertas</span>
@@ -315,6 +368,7 @@ function App() {
           <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
           <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
+          <button type="button" onClick={runScanSimulation}>Simular scan</button>
           <button type="button" onClick={() => downloadProjectBackup(project)}>Exportar</button>
           <button type="button" onClick={() => fileInputRef.current?.click()}>Importar</button>
           <button type="button" onClick={resetProject}>Resetar</button>
@@ -340,7 +394,7 @@ function App() {
                     <small>{rung.description}</small>
                   </button>
 
-                  <div className="ladder-canvas" role="group" aria-label={rung.title}>
+                  <div className={`ladder-canvas ${rungIsEnergized(rung.blocks) ? 'is-energized' : ''}`} role="group" aria-label={rung.title}>
                     <div className="rail left" />
                     <div className="rail right" />
                     <div className="wire" />
