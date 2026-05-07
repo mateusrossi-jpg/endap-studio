@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getMockProject } from './services/mockEndapApi';
 import { EndapLadderBlock, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 
-function blockClass(block: EndapLadderBlock) {
+function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
-  return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''}`;
+  return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
 }
 
 function blockSymbol(block: EndapLadderBlock) {
@@ -18,12 +18,30 @@ function blockSymbol(block: EndapLadderBlock) {
   return '( )';
 }
 
+function blockKindLabel(block: EndapLadderBlock) {
+  if (block.kind === 'contact-no') return 'Contato normalmente aberto';
+  if (block.kind === 'contact-nc') return 'Contato normalmente fechado';
+  if (block.kind === 'timer-ton') return 'Temporizador TON';
+  if (block.kind === 'timer-tof') return 'Temporizador TOF';
+  if (block.kind === 'counter') return 'Contador';
+  return 'Bobina de saída';
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
 
   useEffect(() => {
-    getMockProject().then(setProject);
+    getMockProject().then((loadedProject) => {
+      setProject(loadedProject);
+      setSelectedBlockId(loadedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+    });
   }, []);
+
+  const selectedBlock = useMemo(() => {
+    if (!project || !selectedBlockId) return null;
+    return project.ladderProgram.rungs.flatMap((rung) => rung.blocks).find((block) => block.id === selectedBlockId) ?? null;
+  }, [project, selectedBlockId]);
 
   if (!project) {
     return (
@@ -106,41 +124,83 @@ function App() {
           <button type="button">Simular</button>
         </section>
 
-        <section className="ladder-panel" aria-label="Editor Ladder">
-          <div className="ladder-header">
-            <div>
-              <p className="eyebrow">Programa principal</p>
-              <h2>{project.ladderProgram.name}</h2>
+        <section className="editor-layout">
+          <section className="ladder-panel" aria-label="Editor Ladder">
+            <div className="ladder-header">
+              <div>
+                <p className="eyebrow">Programa principal</p>
+                <h2>{project.ladderProgram.name}</h2>
+              </div>
+              <span className="status-badge">Modo {project.ladderProgram.mode}</span>
             </div>
-            <span className="status-badge">Modo {project.ladderProgram.mode}</span>
-          </div>
 
-          <div className="rung-list">
-            {project.ladderProgram.rungs.map((rung, index) => (
-              <article className="rung-card" key={rung.id}>
-                <div className="rung-meta">
-                  <strong>Rung {index + 1}</strong>
-                  <span>{rung.title}</span>
-                  <small>{rung.description}</small>
-                </div>
-
-                <div className="ladder-canvas" role="group" aria-label={rung.title}>
-                  <div className="rail left" />
-                  <div className="rail right" />
-                  <div className="wire" />
-
-                  <div className="block-row">
-                    {rung.blocks.map((block) => (
-                      <button className={blockClass(block)} key={block.id} type="button">
-                        <span className="block-symbol">{blockSymbol(block)}</span>
-                        <strong>{block.label}</strong>
-                      </button>
-                    ))}
+            <div className="rung-list">
+              {project.ladderProgram.rungs.map((rung, index) => (
+                <article className="rung-card" key={rung.id}>
+                  <div className="rung-meta">
+                    <strong>Rung {index + 1}</strong>
+                    <span>{rung.title}</span>
+                    <small>{rung.description}</small>
                   </div>
+
+                  <div className="ladder-canvas" role="group" aria-label={rung.title}>
+                    <div className="rail left" />
+                    <div className="rail right" />
+                    <div className="wire" />
+
+                    <div className="block-row">
+                      {rung.blocks.map((block) => (
+                        <button
+                          className={blockClass(block, selectedBlockId === block.id)}
+                          key={block.id}
+                          onClick={() => setSelectedBlockId(block.id)}
+                          type="button"
+                        >
+                          <span className="block-symbol">{blockSymbol(block)}</span>
+                          <strong>{block.label}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <aside className="property-panel" aria-label="Propriedades do bloco selecionado">
+            <div className="property-header">
+              <p className="eyebrow">Propriedades</p>
+              <h2>{selectedBlock ? selectedBlock.label : 'Nenhum bloco'}</h2>
+            </div>
+
+            {selectedBlock ? (
+              <div className="property-list">
+                <label>
+                  <span>Tipo</span>
+                  <input readOnly value={blockKindLabel(selectedBlock)} />
+                </label>
+                <label>
+                  <span>Endereço</span>
+                  <input readOnly value={selectedBlock.address ?? 'sem endereço'} />
+                </label>
+                <label>
+                  <span>Estado</span>
+                  <input readOnly value={selectedBlock.active ? 'Ativo / Energizado' : 'Inativo'} />
+                </label>
+                <label>
+                  <span>Preset</span>
+                  <input readOnly value={selectedBlock.presetMs ? `${selectedBlock.presetMs} ms` : 'não aplicado'} />
+                </label>
+
+                <div className="property-actions">
+                  <button type="button">Editar</button>
+                  <button type="button">Duplicar</button>
                 </div>
-              </article>
-            ))}
-          </div>
+              </div>
+            ) : (
+              <p className="empty-copy">Toque em um contato, timer ou bobina para editar.</p>
+            )}
+          </aside>
         </section>
       </section>
     </main>
