@@ -63,6 +63,10 @@ function getAllRungBlocks(rung: { blocks: EndapLadderBlock[]; branches?: EndapLa
   return [...rung.blocks, ...(rung.branches ?? []).flatMap((branch) => branch.blocks)];
 }
 
+function branchIsEnergized(branch: EndapLadderBranch) {
+  return branch.blocks.some((block) => block.active);
+}
+
 function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
   const prefixByKind: Record<EndapLadderBlockKind, string> = {
     'contact-no': 'I',
@@ -624,7 +628,7 @@ function App() {
                     {!!rung.branches?.length && (
                       <div className="branch-stack">
                         {rung.branches.map((branch) => (
-                          <div className="branch-path" key={branch.id}>
+                          <div className={`branch-path ${branchIsEnergized(branch) ? 'is-branch-energized' : ''}`} key={branch.id}>
                             <span className="branch-label">{branch.title ?? 'OR'}</span>
                             <div className="branch-wire" />
                             <div className="branch-blocks">
