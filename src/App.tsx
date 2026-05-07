@@ -1,13 +1,27 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { GatewayContract } from './components/GatewayContract';
+import { RuntimeTimeline } from './components/RuntimeTimeline';
+import { WatchItem, WatchTable } from './components/WatchTable';
 import { getMockProject } from './services/mockEndapApi';
+import {
+  createGatewayEvent,
+  createMemoryChangedEvent,
+  createModeChangedEvent,
+  createRuntimeInfoEvent,
+  createRuntimeWarningEvent,
+  createScanEvent
+} from './services/runtimeEvents';
 import {
   clearStoredProject,
   downloadProjectBackup,
   importProjectFromFile,
+  loadStudioSettings,
   loadProjectFromStorage,
-  saveProjectToStorage
+  saveProjectToStorage,
+  saveStudioSettings,
+  StudioSettings
 } from './services/storage';
-import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from './types/endap';
+import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapLadderRung, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 const AUTO_SCAN_INTERVAL_MS = 200;
@@ -15,13 +29,8 @@ const STEP_SCAN_DELTA_MS = 100;
 
 type RuntimeMode = 'STOP' | 'RUN';
 type MemoryMap = Record<string, boolean>;
-
-type WatchItem = {
-  address: string;
-  type: 'MEM' | 'TIMER' | 'COIL';
-  value: string;
-  active: boolean;
-};
+type ForceTarget = 'on' | 'off';
+type ForceState = Record<string, { target: ForceTarget; source: 'manual'; updatedAt: string }>;
 
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
@@ -64,7 +73,21 @@ function getAllRungBlocks(rung: { blocks: EndapLadderBlock[]; branches?: EndapLa
 }
 
 function branchIsEnergized(branch: EndapLadderBranch) {
-  return branch.blocks.some((block) => block.active);
+  return branch.blocks.length > 0 && branch.blocks.every((block) => block.active);
+}
+
+function isOutputBlock(block: EndapLadderBlock) {
+  return ['coil', 'coil-set', 'coil-reset'].includes(block.kind);
+}
+
+function getAddress(block: EndapLadderBlock) {
+  return block.address ?? block.label;
+}
+
+function readForcedValue(address: string, memory: MemoryMap, forceState: ForceState) {
+  const forced = forceState[address]?.target;
+  if (forced) return forced === 'on';
+  return memory[address] ?? false;
 }
 
 function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
@@ -94,12 +117,13 @@ function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBloc
   };
 }
 
-function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number, memory: MemoryMap) {
-  let power = true;
+function evaluatePath(blocks: EndapLadderBlock[], deltaMs: number, memory: MemoryMap, forceState: ForceState, inputPower = true) {
+  let power = inputPower;
   const nextMemory: MemoryMap = { ...memory };
 
   const nextBlocks = blocks.map((block) => {
-    const address = block.address ?? block.label;
+    const address = getAddress(block);
+    const forcedValue = forceState[address]?.target;
 
     if (block.kind === 'contact-no') {
       power = power && block.active;
@@ -112,13 +136,13 @@ function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number, memory: Mem
     }
 
     if (block.kind === 'memory-contact-no') {
-      const active = nextMemory[address] ?? false;
+      const active = readForcedValue(address, nextMemory, forceState);
       power = power && active;
       return { ...block, active };
     }
 
     if (block.kind === 'memory-contact-nc') {
-      const active = !(nextMemory[address] ?? false);
+      const active = !readForcedValue(address, nextMemory, forceState);
       power = power && active;
       return { ...block, active };
     }
@@ -147,16 +171,18 @@ function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number, memory: Mem
 
     if (block.kind === 'coil-set') {
       if (power) nextMemory[address] = true;
-      return { ...block, active: nextMemory[address] ?? false };
+      const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
+      return { ...block, active };
     }
 
     if (block.kind === 'coil-reset') {
       if (power) nextMemory[address] = false;
-      return { ...block, active: !(nextMemory[address] ?? false) };
+      const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
+      return { ...block, active };
     }
 
     if (block.kind === 'coil') {
-      return { ...block, active: power };
+      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
     }
 
     return block;
@@ -169,7 +195,36 @@ function rungIsEnergized(blocks: EndapLadderBlock[]) {
   return blocks.some((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind) && block.active);
 }
 
-function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchItem[] {
+function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: MemoryMap, forceState: ForceState) {
+  let nextMemory = memory;
+  const firstOutputIndex = rung.blocks.findIndex(isOutputBlock);
+  const conditionBlocks = firstOutputIndex === -1 ? rung.blocks : rung.blocks.slice(0, firstOutputIndex);
+  const outputBlocks = firstOutputIndex === -1 ? [] : rung.blocks.slice(firstOutputIndex);
+  const mainResult = evaluatePath(conditionBlocks, deltaMs, nextMemory, forceState);
+  nextMemory = mainResult.memory;
+
+  const branches = rung.branches?.map((branch) => {
+    const branchResult = evaluatePath(branch.blocks, deltaMs, nextMemory, forceState);
+    nextMemory = branchResult.memory;
+    return { ...branch, blocks: branchResult.blocks };
+  });
+
+  const branchPower = branches?.some((branch) => branch.blocks.length > 0 && branch.blocks.every((block) => block.active)) ?? false;
+  const rungPower = mainResult.blocks.length === 0 ? branchPower : mainResult.blocks.every((block) => block.active) || branchPower;
+  const outputResult = evaluatePath(outputBlocks, deltaMs, nextMemory, forceState, rungPower);
+  nextMemory = outputResult.memory;
+
+  return {
+    rung: {
+      ...rung,
+      blocks: [...mainResult.blocks, ...outputResult.blocks],
+      branches
+    },
+    memory: nextMemory
+  };
+}
+
+function createWatchItems(project: EndapProject, memoryMap: MemoryMap, forceState: ForceState): WatchItem[] {
   const allBlocks = project.ladderProgram.rungs.flatMap(getAllRungBlocks);
 
   const timerItems = allBlocks
@@ -178,7 +233,10 @@ function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchIte
       address: block.address ?? block.label,
       type: 'TIMER' as const,
       value: `${block.elapsedMs ?? 0}/${block.presetMs ?? 0} ms`,
-      active: block.active
+      active: block.active,
+      force: undefined,
+      canToggle: false,
+      canForce: false
     }));
 
   const coilItems = allBlocks
@@ -186,18 +244,61 @@ function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchIte
     .map((block) => ({
       address: block.address ?? block.label,
       type: 'COIL' as const,
-      value: block.active ? 'true' : 'false',
-      active: block.active
+      value: forceState[getAddress(block)] ? `FORCE ${forceState[getAddress(block)].target.toUpperCase()}` : block.active ? 'true' : 'false',
+      active: forceState[getAddress(block)] ? forceState[getAddress(block)].target === 'on' : block.active,
+      force: forceState[getAddress(block)]?.target,
+      canToggle: false,
+      canForce: true
     }));
 
   const memoryItems = Object.entries(memoryMap).map(([address, value]) => ({
     address,
     type: 'MEM' as const,
-    value: value ? 'true' : 'false',
-    active: value
+    value: forceState[address] ? `FORCE ${forceState[address].target.toUpperCase()}` : value ? 'true' : 'false',
+    active: forceState[address] ? forceState[address].target === 'on' : value,
+    force: forceState[address]?.target,
+    canToggle: true,
+    canForce: true
   }));
 
   return [...memoryItems, ...timerItems, ...coilItems];
+}
+
+function collectCoilStates(project: EndapProject): MemoryMap {
+  return Object.fromEntries(
+    project.ladderProgram.rungs
+      .flatMap(getAllRungBlocks)
+      .filter(isOutputBlock)
+      .map((block) => [getAddress(block), block.active])
+  );
+}
+
+function collectTimerDoneStates(project: EndapProject): MemoryMap {
+  return Object.fromEntries(
+    project.ladderProgram.rungs
+      .flatMap(getAllRungBlocks)
+      .filter((block) => block.kind.startsWith('timer'))
+      .map((block) => [getAddress(block), block.active])
+  );
+}
+
+function collectBranchStates(project: EndapProject): MemoryMap {
+  return Object.fromEntries(
+    project.ladderProgram.rungs.flatMap((rung) =>
+      (rung.branches ?? []).map((branch) => [branch.id, branchIsEnergized(branch)] as const)
+    )
+  );
+}
+
+function publishBooleanDiff(
+  previous: MemoryMap,
+  next: MemoryMap,
+  publish: (address: string, value: boolean) => void
+) {
+  const addresses = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  addresses.forEach((address) => {
+    if ((previous[address] ?? false) !== (next[address] ?? false)) publish(address, next[address] ?? false);
+  });
 }
 
 function App() {
@@ -208,7 +309,13 @@ function App() {
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('STOP');
   const [scanCount, setScanCount] = useState(0);
   const [memoryMap, setMemoryMap] = useState<MemoryMap>({});
+  const [forceState, setForceState] = useState<ForceState>({});
+  const [settings, setSettings] = useState<StudioSettings>(() => loadStudioSettings());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const runtimeModeReadyRef = useRef(false);
+  const memoryMapRef = useRef<MemoryMap>({});
+  const forceStateRef = useRef<ForceState>({});
+  const scanCountRef = useRef(0);
 
   useEffect(() => {
     const storedProject = loadProjectFromStorage();
@@ -231,9 +338,38 @@ function App() {
 
   useEffect(() => {
     if (!project) return;
+    if (!settings.autoSave) {
+      setStorageStatus(runtimeMode === 'RUN' ? 'RUN ativo - auto-save desligado' : 'Auto-save desligado');
+      return;
+    }
     saveProjectToStorage(project);
     setStorageStatus(runtimeMode === 'RUN' ? 'RUN ativo — salvando localmente' : 'Salvo localmente');
-  }, [project, runtimeMode]);
+  }, [project, runtimeMode, settings.autoSave]);
+
+  useEffect(() => {
+    saveStudioSettings(settings);
+    document.documentElement.dataset.theme = settings.theme;
+  }, [settings]);
+
+  useEffect(() => {
+    memoryMapRef.current = memoryMap;
+  }, [memoryMap]);
+
+  useEffect(() => {
+    forceStateRef.current = forceState;
+  }, [forceState]);
+
+  useEffect(() => {
+    scanCountRef.current = scanCount;
+  }, [scanCount]);
+
+  useEffect(() => {
+    if (!runtimeModeReadyRef.current) {
+      runtimeModeReadyRef.current = true;
+      return;
+    }
+    createModeChangedEvent(runtimeMode);
+  }, [runtimeMode]);
 
   useEffect(() => {
     if (runtimeMode !== 'RUN') return;
@@ -249,7 +385,7 @@ function App() {
     return project.ladderProgram.rungs.flatMap(getAllRungBlocks).find((block) => block.id === selectedBlockId) ?? null;
   }, [project, selectedBlockId]);
 
-  const watchItems = useMemo(() => (project ? createWatchItems(project, memoryMap) : []), [project, memoryMap]);
+  const watchItems = useMemo(() => (project ? createWatchItems(project, memoryMap, forceState) : []), [project, memoryMap, forceState]);
 
   function updateSelectedBlock(patch: Partial<EndapLadderBlock>) {
     if (!selectedBlockId) return;
@@ -273,6 +409,8 @@ function App() {
         }
       };
     });
+
+    createRuntimeInfoEvent('ladder.block_changed', selectedBlockId, 'Bloco Ladder atualizado', patch as Record<string, unknown>);
   }
 
   function addBlock(kind: EndapLadderBlockKind) {
@@ -315,6 +453,7 @@ function App() {
 
       setSelectedBlockId(branchBlock.id);
       setSelectedRungId(targetRungId);
+      createRuntimeInfoEvent('ladder.branch_changed', targetRungId, 'Branch OR adicionada');
 
       return {
         ...currentProject,
@@ -327,6 +466,7 @@ function App() {
         }
       };
     });
+
   }
 
   function addRung() {
@@ -364,6 +504,7 @@ function App() {
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
       let duplicatedBlock: EndapLadderBlock | null = null;
+      let duplicatedBlockId: string | null = null;
 
       const rungs = currentProject.ladderProgram.rungs.map((rung) => {
         const blockIndex = rung.blocks.findIndex((block) => block.id === selectedBlockId);
@@ -373,6 +514,7 @@ function App() {
             id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
             label: `${rung.blocks[blockIndex].label}_copy`
           };
+          duplicatedBlockId = duplicatedBlock.id;
 
           const blocks = [...rung.blocks];
           blocks.splice(blockIndex + 1, 0, duplicatedBlock);
@@ -390,6 +532,7 @@ function App() {
               id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
               label: `${branch.blocks[branchBlockIndex].label}_copy`
             };
+            duplicatedBlockId = duplicatedBlock.id;
             const blocks = [...branch.blocks];
             blocks.splice(branchBlockIndex + 1, 0, duplicatedBlock);
             setSelectedRungId(rung.id);
@@ -398,7 +541,7 @@ function App() {
         };
       });
 
-      if (duplicatedBlock) setSelectedBlockId(duplicatedBlock.id);
+      if (duplicatedBlockId) setSelectedBlockId(duplicatedBlockId);
 
       return {
         ...currentProject,
@@ -412,23 +555,23 @@ function App() {
   }
 
   function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
+    const scanStartedAt = performance.now();
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
-      let nextMemory = memoryMap;
+      const previousMemory = memoryMapRef.current;
+      const previousCoils = collectCoilStates(currentProject);
+      const previousTimers = collectTimerDoneStates(currentProject);
+      const previousBranches = collectBranchStates(currentProject);
+      let nextMemory = previousMemory;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
-        const mainResult = simulateBlocks(rung.blocks, deltaMs, nextMemory);
-        nextMemory = mainResult.memory;
-        const branches = rung.branches?.map((branch) => {
-          const branchResult = simulateBlocks(branch.blocks, deltaMs, nextMemory);
-          nextMemory = branchResult.memory;
-          return { ...branch, blocks: branchResult.blocks };
-        });
-        return { ...rung, blocks: mainResult.blocks, branches };
+        const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
+        nextMemory = result.memory;
+        return result.rung;
       });
 
       setMemoryMap(nextMemory);
 
-      return {
+      const nextProject = {
         ...currentProject,
         updatedAt: new Date().toISOString(),
         ladderProgram: {
@@ -437,8 +580,27 @@ function App() {
           rungs: simulatedRungs
         }
       };
+
+      publishBooleanDiff(previousMemory, nextMemory, createMemoryChangedEvent);
+      publishBooleanDiff(previousCoils, collectCoilStates(nextProject), (address, value) => {
+        createRuntimeInfoEvent('coil.changed', address, `${address} ${value ? 'energizada' : 'desenergizada'}`, { address, value });
+      });
+      publishBooleanDiff(previousTimers, collectTimerDoneStates(nextProject), (address, value) => {
+        createRuntimeInfoEvent('timer.changed', address, `${address} ${value ? 'completou preset' : 'reiniciou'}`, { address, done: value });
+      });
+      publishBooleanDiff(previousBranches, collectBranchStates(nextProject), (address, value) => {
+        createRuntimeInfoEvent('ladder.branch_changed', address, `${address} ${value ? 'ativada' : 'desativada'}`, { branchId: address, active: value });
+      });
+
+      return nextProject;
     });
-    setScanCount((current) => current + 1);
+    const nextScanCount = scanCountRef.current + 1;
+    if (mode === 'manual') {
+      createRuntimeInfoEvent('runtime.scan', 'studio-runtime', 'STEP executado', { scanCount: nextScanCount, deltaMs });
+    } else if (nextScanCount % 25 === 0) {
+      createScanEvent(Math.round(performance.now() - scanStartedAt), nextScanCount);
+    }
+    setScanCount(nextScanCount);
     setStorageStatus(mode === 'auto' ? 'RUN executando scans' : 'STEP executado');
   }
 
@@ -446,6 +608,7 @@ function App() {
     setRuntimeMode('STOP');
     setScanCount(0);
     setMemoryMap({});
+    setForceState({});
     clearStoredProject();
     getMockProject().then((loadedProject) => {
       const refreshedProject = { ...loadedProject, updatedAt: new Date().toISOString() };
@@ -453,6 +616,7 @@ function App() {
       setSelectedRungId(refreshedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(refreshedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
       setStorageStatus('Projeto reiniciado');
+      createRuntimeWarningEvent('project.changed', 'studio-project', 'Projeto resetado para mock local');
     });
   }
 
@@ -464,15 +628,66 @@ function App() {
       const importedProject = await importProjectFromFile(file);
       setRuntimeMode('STOP');
       setMemoryMap({});
+      setForceState({});
       setProject({ ...importedProject, updatedAt: new Date().toISOString() });
       setSelectedRungId(importedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(importedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
       setStorageStatus('Projeto importado');
-    } catch {
-      setStorageStatus('Falha ao importar projeto');
+      createRuntimeInfoEvent('project.changed', 'studio-project', `Projeto importado: ${importedProject.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao importar projeto';
+      setStorageStatus(message);
+      createRuntimeWarningEvent('project.changed', 'studio-project', message);
     } finally {
       event.target.value = '';
     }
+  }
+
+  function handleExportProject() {
+    if (!project) return;
+    downloadProjectBackup(project);
+    createRuntimeInfoEvent('project.changed', 'studio-project', `Projeto exportado: ${project.name}`);
+  }
+
+  function toggleRuntimeMode() {
+    setRuntimeMode((current) => (current === 'RUN' ? 'STOP' : 'RUN'));
+  }
+
+  function updateSettings(patch: Partial<StudioSettings>) {
+    setSettings((current) => ({ ...current, ...patch }));
+  }
+
+  function toggleMemory(address: string) {
+    setMemoryMap((current) => {
+      const nextValue = !(current[address] ?? false);
+      createMemoryChangedEvent(address, nextValue);
+      return { ...current, [address]: nextValue };
+    });
+  }
+
+  function setForce(address: string, target: ForceTarget) {
+    setForceState((current) => ({
+      ...current,
+      [address]: { target, source: 'manual', updatedAt: new Date().toISOString() }
+    }));
+    createRuntimeWarningEvent('memory.changed', address, `${address} em FORCE ${target.toUpperCase()}`, { address, force: target });
+  }
+
+  function releaseForce(address: string) {
+    setForceState((current) => {
+      const next = { ...current };
+      delete next[address];
+      return next;
+    });
+    createRuntimeInfoEvent('memory.changed', address, `${address} liberado do FORCE`, { address });
+  }
+
+  function handleGatewayResult(connected: boolean, message: string) {
+    createGatewayEvent(connected, settings.gatewayBaseUrl);
+    createRuntimeInfoEvent(connected ? 'gateway.connected' : 'gateway.disconnected', 'gateway-contract', message, {
+      mode: settings.apiMode,
+      gatewayBaseUrl: settings.gatewayBaseUrl
+    });
   }
 
   function handlePresetChange(event: ChangeEvent<HTMLInputElement>) {
@@ -565,11 +780,11 @@ function App() {
           <button type="button" onClick={() => addBlock('coil-set')}>+ SET</button>
           <button type="button" onClick={() => addBlock('coil-reset')}>+ RESET</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
-          <button type="button" onClick={() => setRuntimeMode((current) => (current === 'RUN' ? 'STOP' : 'RUN'))}>
+          <button type="button" onClick={toggleRuntimeMode}>
             {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
           </button>
           <button type="button" onClick={() => runScanSimulation('manual')}>STEP</button>
-          <button type="button" onClick={() => downloadProjectBackup(project)}>Exportar</button>
+          <button type="button" onClick={handleExportProject}>Exportar</button>
           <button type="button" onClick={() => fileInputRef.current?.click()}>Importar</button>
           <button type="button" onClick={resetProject}>Resetar</button>
           <input ref={fileInputRef} className="file-input" type="file" accept=".json,.endap.json,application/json" onChange={handleImportProject} />
@@ -710,27 +925,18 @@ function App() {
               <p className="empty-copy">Toque em um contato, timer ou bobina para editar.</p>
             )}
 
-            <div className="watch-panel">
-              <div className="watch-header">
-                <p className="eyebrow">Watch table</p>
-                <strong>{watchItems.length} variáveis</strong>
-              </div>
-              {watchItems.length === 0 ? (
-                <p className="empty-copy">Execute o runtime para popular memórias, timers e bobinas.</p>
-              ) : (
-                <div className="watch-list">
-                  {watchItems.map((item) => (
-                    <div className="watch-row" key={`${item.type}-${item.address}`}>
-                      <span className={`watch-dot ${item.active ? 'is-active' : ''}`} />
-                      <strong>{item.address}</strong>
-                      <small>{item.type}</small>
-                      <code>{item.value}</code>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <WatchTable
+              items={watchItems}
+              onToggleMemory={toggleMemory}
+              onForce={setForce}
+              onReleaseForce={releaseForce}
+            />
           </aside>
+        </section>
+
+        <section className="observability-layout" aria-label="Observabilidade e gateway">
+          <RuntimeTimeline />
+          <GatewayContract settings={settings} onSettingsChange={updateSettings} onGatewayResult={handleGatewayResult} />
         </section>
       </section>
     </main>

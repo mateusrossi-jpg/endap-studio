@@ -1,6 +1,7 @@
 export type EndapRuntimeEventType =
   | 'runtime.scan'
   | 'runtime.mode_changed'
+  | 'project.changed'
   | 'ladder.block_changed'
   | 'ladder.branch_changed'
   | 'memory.changed'
@@ -105,6 +106,36 @@ export function createMemoryChangedEvent(address: string, value: boolean): Endap
       address,
       value
     }
+  });
+}
+
+export function createRuntimeInfoEvent(
+  type: EndapRuntimeEventType,
+  source: string,
+  message: string,
+  payload?: Record<string, unknown>
+): EndapRuntimeEvent {
+  return runtimeEventBus.publish({
+    type,
+    severity: 'info',
+    source,
+    message,
+    payload
+  });
+}
+
+export function createRuntimeWarningEvent(
+  type: EndapRuntimeEventType,
+  source: string,
+  message: string,
+  payload?: Record<string, unknown>
+): EndapRuntimeEvent {
+  return runtimeEventBus.publish({
+    type,
+    severity: 'warning',
+    source,
+    message,
+    payload
   });
 }
 
