@@ -7,7 +7,7 @@ import {
   loadProjectFromStorage,
   saveProjectToStorage
 } from './services/storage';
-import { EndapLadderBlock, EndapLadderBlockKind, EndapProject } from './types/endap';
+import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 const AUTO_SCAN_INTERVAL_MS = 200;
@@ -57,6 +57,10 @@ function blockKindLabel(block: EndapLadderBlock) {
 function timerProgress(block: EndapLadderBlock) {
   if (!block.presetMs) return 0;
   return Math.min(100, Math.round(((block.elapsedMs ?? 0) / block.presetMs) * 100));
+}
+
+function getAllRungBlocks(rung: { blocks: EndapLadderBlock[]; branches?: EndapLadderBranch[] }) {
+  return [...rung.blocks, ...(rung.branches ?? []).flatMap((branch) => branch.blocks)];
 }
 
 function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
@@ -162,8 +166,9 @@ function rungIsEnergized(blocks: EndapLadderBlock[]) {
 }
 
 function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchItem[] {
-  const timerItems = project.ladderProgram.rungs
-    .flatMap((rung) => rung.blocks)
+  const allBlocks = project.ladderProgram.rungs.flatMap(getAllRungBlocks);
+
+  const timerItems = allBlocks
     .filter((block) => block.kind.startsWith('timer'))
     .map((block) => ({
       address: block.address ?? block.label,
@@ -172,8 +177,7 @@ function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchIte
       active: block.active
     }));
 
-  const coilItems = project.ladderProgram.rungs
-    .flatMap((rung) => rung.blocks)
+  const coilItems = allBlocks
     .filter((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind))
     .map((block) => ({
       address: block.address ?? block.label,
@@ -238,7 +242,7 @@ function App() {
 
   const selectedBlock = useMemo(() => {
     if (!project || !selectedBlockId) return null;
-    return project.ladderProgram.rungs.flatMap((rung) => rung.blocks).find((block) => block.id === selectedBlockId) ?? null;
+    return project.ladderProgram.rungs.flatMap(getAllRungBlocks).find((block) => block.id === selectedBlockId) ?? null;
   }, [project, selectedBlockId]);
 
   const watchItems = useMemo(() => (project ? createWatchItems(project, memoryMap) : []), [project, memoryMap]);
@@ -256,7 +260,11 @@ function App() {
           ...currentProject.ladderProgram,
           rungs: currentProject.ladderProgram.rungs.map((rung) => ({
             ...rung,
-            blocks: rung.blocks.map((block) => (block.id === selectedBlockId ? { ...block, ...patch } : block))
+            blocks: rung.blocks.map((block) => (block.id === selectedBlockId ? { ...block, ...patch } : block)),
+            branches: rung.branches?.map((branch) => ({
+              ...branch,
+              blocks: branch.blocks.map((block) => (block.id === selectedBlockId ? { ...block, ...patch } : block))
+            }))
           }))
         }
       };
@@ -269,7 +277,7 @@ function App() {
       const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
       if (!targetRungId) return currentProject;
 
-      const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + rung.blocks.length, 0) + 1;
+      const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + getAllRungBlocks(rung).length, 0) + 1;
       const newBlock = createBlock(kind, nextIndex);
       setSelectedBlockId(newBlock.id);
       setSelectedRungId(targetRungId);
@@ -281,6 +289,36 @@ function App() {
           ...currentProject.ladderProgram,
           rungs: currentProject.ladderProgram.rungs.map((rung) =>
             rung.id === targetRungId ? { ...rung, blocks: [...rung.blocks, newBlock] } : rung
+          )
+        }
+      };
+    });
+  }
+
+  function addBranch() {
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
+      if (!targetRungId) return currentProject;
+
+      const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + getAllRungBlocks(rung).length, 0) + 1;
+      const branchBlock = createBlock('memory-contact-no', nextIndex);
+      const branch: EndapLadderBranch = {
+        id: `branch-${Date.now()}`,
+        title: 'OR branch',
+        blocks: [branchBlock]
+      };
+
+      setSelectedBlockId(branchBlock.id);
+      setSelectedRungId(targetRungId);
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: currentProject.ladderProgram.rungs.map((rung) =>
+            rung.id === targetRungId ? { ...rung, branches: [...(rung.branches ?? []), branch] } : rung
           )
         }
       };
@@ -325,18 +363,35 @@ function App() {
 
       const rungs = currentProject.ladderProgram.rungs.map((rung) => {
         const blockIndex = rung.blocks.findIndex((block) => block.id === selectedBlockId);
-        if (blockIndex === -1) return rung;
+        if (blockIndex !== -1) {
+          duplicatedBlock = {
+            ...rung.blocks[blockIndex],
+            id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            label: `${rung.blocks[blockIndex].label}_copy`
+          };
 
-        duplicatedBlock = {
-          ...rung.blocks[blockIndex],
-          id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          label: `${rung.blocks[blockIndex].label}_copy`
+          const blocks = [...rung.blocks];
+          blocks.splice(blockIndex + 1, 0, duplicatedBlock);
+          setSelectedRungId(rung.id);
+          return { ...rung, blocks };
+        }
+
+        return {
+          ...rung,
+          branches: rung.branches?.map((branch) => {
+            const branchBlockIndex = branch.blocks.findIndex((block) => block.id === selectedBlockId);
+            if (branchBlockIndex === -1) return branch;
+            duplicatedBlock = {
+              ...branch.blocks[branchBlockIndex],
+              id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              label: `${branch.blocks[branchBlockIndex].label}_copy`
+            };
+            const blocks = [...branch.blocks];
+            blocks.splice(branchBlockIndex + 1, 0, duplicatedBlock);
+            setSelectedRungId(rung.id);
+            return { ...branch, blocks };
+          })
         };
-
-        const blocks = [...rung.blocks];
-        blocks.splice(blockIndex + 1, 0, duplicatedBlock);
-        setSelectedRungId(rung.id);
-        return { ...rung, blocks };
       });
 
       if (duplicatedBlock) setSelectedBlockId(duplicatedBlock.id);
@@ -357,9 +412,14 @@ function App() {
       if (!currentProject) return currentProject;
       let nextMemory = memoryMap;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
-        const result = simulateBlocks(rung.blocks, deltaMs, nextMemory);
-        nextMemory = result.memory;
-        return { ...rung, blocks: result.blocks };
+        const mainResult = simulateBlocks(rung.blocks, deltaMs, nextMemory);
+        nextMemory = mainResult.memory;
+        const branches = rung.branches?.map((branch) => {
+          const branchResult = simulateBlocks(branch.blocks, deltaMs, nextMemory);
+          nextMemory = branchResult.memory;
+          return { ...branch, blocks: branchResult.blocks };
+        });
+        return { ...rung, blocks: mainResult.blocks, branches };
       });
 
       setMemoryMap(nextMemory);
@@ -496,6 +556,7 @@ function App() {
           <button type="button" onClick={() => addBlock('contact-no')}>+ Contato NA</button>
           <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
           <button type="button" onClick={() => addBlock('memory-contact-no')}>+ Memória</button>
+          <button type="button" onClick={addBranch}>+ Branch OR</button>
           <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
           <button type="button" onClick={() => addBlock('coil-set')}>+ SET</button>
           <button type="button" onClick={() => addBlock('coil-reset')}>+ RESET</button>
@@ -527,9 +588,10 @@ function App() {
                     <strong>Rung {index + 1}</strong>
                     <span>{rung.title}</span>
                     <small>{rung.description}</small>
+                    {!!rung.branches?.length && <small>{rung.branches.length} branch OR</small>}
                   </button>
 
-                  <div className={`ladder-canvas ${rungIsEnergized(rung.blocks) ? 'is-energized' : ''}`} role="group" aria-label={rung.title}>
+                  <div className={`ladder-canvas ${rungIsEnergized(getAllRungBlocks(rung)) ? 'is-energized' : ''}`} role="group" aria-label={rung.title}>
                     <div className="rail left" />
                     <div className="rail right" />
                     <div className="wire" />
@@ -558,6 +620,33 @@ function App() {
                         </button>
                       ))}
                     </div>
+
+                    {!!rung.branches?.length && (
+                      <div className="branch-stack">
+                        {rung.branches.map((branch) => (
+                          <div className="branch-path" key={branch.id}>
+                            <span className="branch-label">{branch.title ?? 'OR'}</span>
+                            <div className="branch-wire" />
+                            <div className="branch-blocks">
+                              {branch.blocks.map((block) => (
+                                <button
+                                  className={blockClass(block, selectedBlockId === block.id)}
+                                  key={block.id}
+                                  onClick={() => {
+                                    setSelectedRungId(rung.id);
+                                    setSelectedBlockId(block.id);
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="block-symbol">{blockSymbol(block)}</span>
+                                  <strong>{block.label}</strong>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}
