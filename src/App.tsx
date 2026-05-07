@@ -1,5 +1,12 @@
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { getMockProject } from './services/mockEndapApi';
+import {
+  clearStoredProject,
+  downloadProjectBackup,
+  importProjectFromFile,
+  loadProjectFromStorage,
+  saveProjectToStorage
+} from './services/storage';
 import { EndapLadderBlock, EndapLadderBlockKind, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
@@ -53,14 +60,33 @@ function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [selectedRungId, setSelectedRungId] = useState<string | null>(null);
+  const [storageStatus, setStorageStatus] = useState('Carregando projeto local...');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    const storedProject = loadProjectFromStorage();
+
+    if (storedProject) {
+      setProject(storedProject);
+      setSelectedRungId(storedProject.ladderProgram.rungs[0]?.id ?? null);
+      setSelectedBlockId(storedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setStorageStatus('Projeto restaurado do navegador');
+      return;
+    }
+
     getMockProject().then((loadedProject) => {
       setProject(loadedProject);
       setSelectedRungId(loadedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(loadedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setStorageStatus('Projeto mock carregado');
     });
   }, []);
+
+  useEffect(() => {
+    if (!project) return;
+    saveProjectToStorage(project);
+    setStorageStatus('Salvo localmente');
+  }, [project]);
 
   const selectedBlock = useMemo(() => {
     if (!project || !selectedBlockId) return null;
@@ -176,6 +202,34 @@ function App() {
     });
   }
 
+  function resetProject() {
+    clearStoredProject();
+    getMockProject().then((loadedProject) => {
+      const refreshedProject = { ...loadedProject, updatedAt: new Date().toISOString() };
+      setProject(refreshedProject);
+      setSelectedRungId(refreshedProject.ladderProgram.rungs[0]?.id ?? null);
+      setSelectedBlockId(refreshedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setStorageStatus('Projeto reiniciado');
+    });
+  }
+
+  async function handleImportProject(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const importedProject = await importProjectFromFile(file);
+      setProject({ ...importedProject, updatedAt: new Date().toISOString() });
+      setSelectedRungId(importedProject.ladderProgram.rungs[0]?.id ?? null);
+      setSelectedBlockId(importedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setStorageStatus('Projeto importado');
+    } catch {
+      setStorageStatus('Falha ao importar projeto');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
   function handlePresetChange(event: ChangeEvent<HTMLInputElement>) {
     const rawValue = event.target.value;
     const presetMs = rawValue.trim() === '' ? undefined : Number(rawValue);
@@ -189,7 +243,7 @@ function App() {
           <span className="brand-mark">E</span>
           <div>
             <strong>ENDAP Studio</strong>
-            <small>Carregando projeto local...</small>
+            <small>{storageStatus}</small>
           </div>
         </div>
       </main>
@@ -228,7 +282,7 @@ function App() {
           </div>
           <div className="connection-pill">
             <span className="pulse" />
-            {project.gateway.name} {project.gateway.status}
+            {storageStatus}
           </div>
         </header>
 
@@ -261,7 +315,10 @@ function App() {
           <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
           <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
-          <button type="button">Simular</button>
+          <button type="button" onClick={() => downloadProjectBackup(project)}>Exportar</button>
+          <button type="button" onClick={() => fileInputRef.current?.click()}>Importar</button>
+          <button type="button" onClick={resetProject}>Resetar</button>
+          <input ref={fileInputRef} className="file-input" type="file" accept=".json,.endap.json,application/json" onChange={handleImportProject} />
         </section>
 
         <section className="editor-layout">
@@ -347,7 +404,7 @@ function App() {
                 </div>
 
                 <div className="property-actions">
-                  <button type="button">Salvar mock</button>
+                  <button type="button" onClick={() => saveProjectToStorage(project)}>Salvar local</button>
                   <button type="button" onClick={duplicateSelectedBlock}>Duplicar</button>
                 </div>
               </div>
