@@ -10,11 +10,15 @@
 - Watch Table com estados de memória, timers e coils, alternância manual de memórias e FORCE ON/OFF/Release básico.
 - CTU básico com preset, acumulador, detecção de borda de subida e visualização na Watch Table.
 - Painel Gateway / Firmware Contract com modo mock/gateway, base URL, endpoints previstos, status e teste de conexão.
+- Painel de validação local com falhas, avisos e itens informativos antes de exportar ou integrar gateway.
+- Painéis locais de I/O, nós, fail-safe e diagnóstico, com toggles mockados para estado/manual/teste de I/O.
 - Settings locais persistidos em `localStorage`: modo API, base URL, tema preparado e auto-save.
 
 ## Ladder editor
 
 - Editor Ladder mobile-first com rungs, seleção de bloco, edição de label/endereço/preset e duplicação.
+- Rungs podem ser renomeadas, descritas, reordenadas e removidas.
+- Blocos podem ser duplicados, movidos para esquerda/direita e removidos.
 - Blocos suportados:
   - `contact-no`
   - `contact-nc`
@@ -36,6 +40,7 @@
 - O scan automático publica eventos de forma limitada para evitar excesso de timeline.
 - Mudanças relevantes de memória, coil, timer e branch publicam eventos no `RuntimeEventBus`.
 - FORCE é somente local/simulado e foi modelado para futura integração com gateway real.
+- Controles para limpar runtime local e liberar todos os FORCEs sem resetar o projeto.
 - O motor Ladder fica isolado em `src/services/ladderRuntime.ts` e possui testes unitários para TON, OR branch, SET/RESET e CTU.
 
 ## Persistência

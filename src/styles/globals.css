@@ -586,19 +586,22 @@ h2 {
   top: 18px;
 }
 
-.property-list {
+.property-list,
+.rung-editor {
   display: grid;
   gap: 14px;
   padding: 16px;
 }
 
 .property-list label,
+.rung-editor label,
 .state-toggle {
   display: grid;
   gap: 7px;
 }
 
 .property-list label span,
+.rung-editor label span,
 .state-toggle span {
   color: var(--muted);
   font-size: 0.78rem;
@@ -608,6 +611,7 @@ h2 {
 }
 
 .property-list input,
+.rung-editor input,
 .settings-grid input,
 .settings-grid select {
   width: 100%;
@@ -635,6 +639,15 @@ h2 {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   padding-top: 4px;
+}
+
+.property-actions.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rung-editor {
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 17, 19, 0.38);
 }
 
 .watch-panel {
@@ -724,14 +737,16 @@ h2 {
 
 .observability-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr) minmax(320px, 0.9fr);
   gap: 14px;
   margin-top: 14px;
   align-items: start;
 }
 
 .timeline-panel,
-.gateway-panel {
+.health-panel,
+.gateway-panel,
+.field-panel {
   border: 1px solid var(--line);
   border-radius: 26px;
   background: rgba(11, 25, 28, 0.92);
@@ -759,6 +774,69 @@ h2 {
   max-height: 420px;
   overflow-y: auto;
   padding: 12px;
+}
+
+.health-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.health-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 3px solid var(--cyan);
+  border-radius: 12px;
+  background: rgba(15, 34, 38, 0.72);
+}
+
+.health-row.severity-warning {
+  border-left-color: var(--amber);
+}
+
+.health-row.severity-fault {
+  border-left-color: var(--red);
+}
+
+.health-row span,
+.health-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.health-row span {
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.health-row strong {
+  color: var(--text);
+}
+
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid rgba(40, 214, 196, 0.28);
+  border-radius: 999px;
+  color: var(--cyan);
+  padding: 0 10px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.health-badge.severity-warning {
+  border-color: rgba(255, 202, 95, 0.42);
+  color: var(--amber);
+}
+
+.health-badge.severity-fault {
+  border-color: rgba(255, 107, 107, 0.48);
+  color: var(--red);
 }
 
 .timeline-row {
@@ -853,6 +931,71 @@ h2 {
   font-weight: 900;
 }
 
+.field-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(220px, 0.7fr));
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.io-list,
+.compact-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.io-row {
+  display: grid;
+  grid-template-columns: auto minmax(96px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(110, 231, 221, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 34, 38, 0.72);
+}
+
+.io-row.is-active {
+  border-color: rgba(70, 230, 134, 0.44);
+  background: rgba(70, 230, 134, 0.08);
+}
+
+.io-row p,
+.io-row small,
+.compact-row small,
+.compact-row span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.io-row code {
+  color: var(--cyan);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.compact-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 3px solid var(--cyan);
+  border-radius: 12px;
+  background: rgba(15, 34, 38, 0.72);
+}
+
+.compact-row.health-warning {
+  border-left-color: var(--amber);
+}
+
+.compact-row.health-fault {
+  border-left-color: var(--red);
+}
+
 .empty-copy {
   margin: 0;
   padding: 16px;
@@ -865,6 +1008,10 @@ h2 {
 
   .observability-layout {
     grid-template-columns: 1fr;
+  }
+
+  .field-layout {
+    grid-template-columns: 1fr 1fr;
   }
 
   .property-panel {
@@ -950,7 +1097,10 @@ h2 {
   }
 
   .property-actions,
+  .property-actions.three,
   .watch-row,
+  .io-row,
+  .field-layout,
   .timeline-row,
   .settings-grid {
     grid-template-columns: 1fr;

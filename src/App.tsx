@@ -1,5 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FieldPanels } from './components/FieldPanels';
 import { GatewayContract } from './components/GatewayContract';
+import { ProjectHealthPanel, ProjectIssue } from './components/ProjectHealthPanel';
 import { RuntimeTimeline } from './components/RuntimeTimeline';
 import { WatchItem, WatchTable } from './components/WatchTable';
 import { getMockProject } from './services/mockEndapApi';
@@ -38,11 +40,12 @@ import {
 } from './services/storage';
 import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from './types/endap';
 
-const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
+const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'] as const;
 const AUTO_SCAN_INTERVAL_MS = 200;
 const STEP_SCAN_DELTA_MS = 100;
 
 type RuntimeMode = 'STOP' | 'RUN';
+type NavItem = (typeof navItems)[number];
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
   return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
@@ -148,6 +151,84 @@ function publishBooleanDiff(
   });
 }
 
+function resetRuntimeBlock(block: EndapLadderBlock): EndapLadderBlock {
+  if (block.kind.startsWith('timer')) return { ...block, active: false, elapsedMs: 0 };
+  if (block.kind === 'counter') return { ...block, active: false, accumulatedCount: 0, previousInput: false };
+  if (['coil', 'coil-set', 'coil-reset', 'memory-contact-no', 'memory-contact-nc'].includes(block.kind)) return { ...block, active: false };
+  return block;
+}
+
+function validateProject(project: EndapProject, memoryMap: MemoryMap, forceState: ForceState, settings: StudioSettings): ProjectIssue[] {
+  const issues: ProjectIssue[] = [];
+  const allBlocks = project.ladderProgram.rungs.flatMap(getAllRungBlocks);
+  const addressCounts = new Map<string, number>();
+
+  if (project.ladderProgram.rungs.length === 0) {
+    issues.push({ id: 'program-empty', severity: 'fault', source: 'Ladder', message: 'Programa sem rungs.' });
+  }
+
+  project.ladderProgram.rungs.forEach((rung, index) => {
+    if (rung.blocks.length === 0 && !rung.branches?.length) {
+      issues.push({ id: `${rung.id}-empty`, severity: 'fault', source: `Rung ${index + 1}`, message: 'Rung sem blocos.' });
+    }
+    if (!getAllRungBlocks(rung).some((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind))) {
+      issues.push({ id: `${rung.id}-no-output`, severity: 'warning', source: `Rung ${index + 1}`, message: 'Rung sem bobina de saída.' });
+    }
+    if ((rung.branches ?? []).some((branch) => branch.blocks.length === 0)) {
+      issues.push({ id: `${rung.id}-empty-branch`, severity: 'warning', source: `Rung ${index + 1}`, message: 'Branch OR vazia.' });
+    }
+  });
+
+  allBlocks.forEach((block) => {
+    const address = getAddress(block).trim();
+    if (!block.label.trim()) {
+      issues.push({ id: `${block.id}-label`, severity: 'fault', source: block.id, message: 'Bloco sem label.' });
+    }
+    if (!address) {
+      issues.push({ id: `${block.id}-address`, severity: 'fault', source: block.label || block.id, message: 'Bloco sem endereço.' });
+    }
+    if (address) addressCounts.set(address, (addressCounts.get(address) ?? 0) + 1);
+    if (block.kind.startsWith('timer') && (!block.presetMs || block.presetMs <= 0)) {
+      issues.push({ id: `${block.id}-preset-ms`, severity: 'warning', source: block.label, message: 'Timer sem preset válido.' });
+    }
+    if (block.kind === 'counter' && (!block.presetCount || block.presetCount <= 0)) {
+      issues.push({ id: `${block.id}-preset-count`, severity: 'warning', source: block.label, message: 'CTU sem preset de contagem válido.' });
+    }
+  });
+
+  addressCounts.forEach((count, address) => {
+    if (count > 1 && !address.startsWith('I')) {
+      issues.push({ id: `dup-${address}`, severity: 'info', source: address, message: `${count} blocos usam o mesmo endereço.` });
+    }
+  });
+
+  Object.keys(forceState).forEach((address) => {
+    issues.push({ id: `force-${address}`, severity: 'warning', source: address, message: 'FORCE manual ativo na simulação.' });
+  });
+
+  if (settings.apiMode === 'gateway' && settings.gatewayBaseUrl.trim() === '') {
+    issues.push({ id: 'gateway-url', severity: 'fault', source: 'Gateway', message: 'Modo gateway exige Base URL.' });
+  }
+
+  if (Object.keys(memoryMap).length === 0) {
+    issues.push({ id: 'memory-empty', severity: 'info', source: 'Runtime', message: 'Nenhuma memória simulada registrada ainda.' });
+  }
+
+  return issues;
+}
+
+function sectionIdForNavItem(item: NavItem) {
+  const sectionByItem: Record<NavItem, string> = {
+    Ladder: 'ladder-section',
+    IO: 'io-section',
+    Gateway: 'gateway-section',
+    Nós: 'nodes-section',
+    'Fail-safe': 'failsafe-section',
+    Diagnóstico: 'diagnostics-section'
+  };
+  return sectionByItem[item];
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -158,6 +239,7 @@ function App() {
   const [memoryMap, setMemoryMap] = useState<MemoryMap>({});
   const [forceState, setForceState] = useState<ForceState>({});
   const [settings, setSettings] = useState<StudioSettings>(() => loadStudioSettings());
+  const [activeNavItem, setActiveNavItem] = useState<NavItem>('Ladder');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const runtimeModeReadyRef = useRef(false);
   const memoryMapRef = useRef<MemoryMap>({});
@@ -232,7 +314,16 @@ function App() {
     return project.ladderProgram.rungs.flatMap(getAllRungBlocks).find((block) => block.id === selectedBlockId) ?? null;
   }, [project, selectedBlockId]);
 
+  const selectedRung = useMemo(() => {
+    if (!project || !selectedRungId) return null;
+    return project.ladderProgram.rungs.find((rung) => rung.id === selectedRungId) ?? null;
+  }, [project, selectedRungId]);
+
   const watchItems = useMemo(() => (project ? createWatchItems(project, memoryMap, forceState) : []), [project, memoryMap, forceState]);
+  const projectIssues = useMemo(
+    () => (project ? validateProject(project, memoryMap, forceState, settings) : []),
+    [forceState, memoryMap, project, settings]
+  );
 
   function updateSelectedBlock(patch: Partial<EndapLadderBlock>) {
     if (!selectedBlockId) return;
@@ -316,6 +407,22 @@ function App() {
 
   }
 
+  function updateSelectedRung(patch: Partial<NonNullable<typeof selectedRung>>) {
+    if (!selectedRungId) return;
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: currentProject.ladderProgram.rungs.map((rung) => (rung.id === selectedRungId ? { ...rung, ...patch } : rung))
+        }
+      };
+    });
+    createRuntimeInfoEvent('project.changed', selectedRungId, 'Rung atualizada', patch as Record<string, unknown>);
+  }
+
   function addRung() {
     const newBlock = createBlock('contact-no', (project?.ladderProgram.rungs.length ?? 0) + 10);
     const newRungId = `rung-${Date.now()}`;
@@ -343,6 +450,47 @@ function App() {
 
     setSelectedRungId(newRungId);
     setSelectedBlockId(newBlock.id);
+  }
+
+  function moveSelectedRung(direction: -1 | 1) {
+    if (!selectedRungId) return;
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const currentIndex = currentProject.ladderProgram.rungs.findIndex((rung) => rung.id === selectedRungId);
+      const targetIndex = currentIndex + direction;
+      if (currentIndex === -1 || targetIndex < 0 || targetIndex >= currentProject.ladderProgram.rungs.length) return currentProject;
+      const rungs = [...currentProject.ladderProgram.rungs];
+      const [selected] = rungs.splice(currentIndex, 1);
+      rungs.splice(targetIndex, 0, selected);
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs
+        }
+      };
+    });
+    createRuntimeInfoEvent('project.changed', selectedRungId, `Rung movida ${direction < 0 ? 'para cima' : 'para baixo'}`);
+  }
+
+  function deleteSelectedRung() {
+    if (!selectedRungId) return;
+    setProject((currentProject) => {
+      if (!currentProject || currentProject.ladderProgram.rungs.length <= 1) return currentProject;
+      const nextRungs = currentProject.ladderProgram.rungs.filter((rung) => rung.id !== selectedRungId);
+      setSelectedRungId(nextRungs[0]?.id ?? null);
+      setSelectedBlockId(nextRungs[0]?.blocks[0]?.id ?? null);
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: nextRungs
+        }
+      };
+    });
+    createRuntimeWarningEvent('project.changed', selectedRungId, 'Rung removida do projeto');
   }
 
   function duplicateSelectedBlock() {
@@ -399,6 +547,81 @@ function App() {
         }
       };
     });
+  }
+
+  function moveSelectedBlock(direction: -1 | 1) {
+    if (!selectedBlockId) return;
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+
+      const rungs = currentProject.ladderProgram.rungs.map((rung) => {
+        const mainIndex = rung.blocks.findIndex((block) => block.id === selectedBlockId);
+        if (mainIndex !== -1) {
+          const targetIndex = mainIndex + direction;
+          if (targetIndex < 0 || targetIndex >= rung.blocks.length) return rung;
+          const blocks = [...rung.blocks];
+          const [selected] = blocks.splice(mainIndex, 1);
+          blocks.splice(targetIndex, 0, selected);
+          return { ...rung, blocks };
+        }
+
+        return {
+          ...rung,
+          branches: rung.branches?.map((branch) => {
+            const branchIndex = branch.blocks.findIndex((block) => block.id === selectedBlockId);
+            if (branchIndex === -1) return branch;
+            const targetIndex = branchIndex + direction;
+            if (targetIndex < 0 || targetIndex >= branch.blocks.length) return branch;
+            const blocks = [...branch.blocks];
+            const [selected] = blocks.splice(branchIndex, 1);
+            blocks.splice(targetIndex, 0, selected);
+            return { ...branch, blocks };
+          })
+        };
+      });
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs
+        }
+      };
+    });
+    createRuntimeInfoEvent('ladder.block_changed', selectedBlockId, `Bloco movido ${direction < 0 ? 'para esquerda' : 'para direita'}`);
+  }
+
+  function deleteSelectedBlock() {
+    if (!selectedBlockId) return;
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      let nextSelectedBlockId: string | null = null;
+
+      const rungs = currentProject.ladderProgram.rungs.map((rung) => {
+        const blocks = rung.blocks.filter((block) => block.id !== selectedBlockId);
+        const branches = rung.branches
+          ?.map((branch) => ({ ...branch, blocks: branch.blocks.filter((block) => block.id !== selectedBlockId) }))
+          .filter((branch) => branch.blocks.length > 0);
+
+        if (rung.id === selectedRungId) {
+          nextSelectedBlockId = blocks[0]?.id ?? branches?.[0]?.blocks[0]?.id ?? null;
+        }
+
+        return { ...rung, blocks, branches };
+      });
+
+      setSelectedBlockId(nextSelectedBlockId);
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs
+        }
+      };
+    });
+    createRuntimeWarningEvent('ladder.block_changed', selectedBlockId, 'Bloco removido do Ladder');
   }
 
   function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
@@ -471,6 +694,40 @@ function App() {
     });
   }
 
+  function resetRuntimeState() {
+    setRuntimeMode('STOP');
+    setScanCount(0);
+    setMemoryMap({});
+    setForceState({});
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          scanTimeMs: 0,
+          rungs: currentProject.ladderProgram.rungs.map((rung) => ({
+            ...rung,
+            blocks: rung.blocks.map(resetRuntimeBlock),
+            branches: rung.branches?.map((branch) => ({
+              ...branch,
+              blocks: branch.blocks.map(resetRuntimeBlock)
+            }))
+          }))
+        }
+      };
+    });
+    setStorageStatus('Runtime local limpo');
+    createRuntimeWarningEvent('runtime.scan', 'studio-runtime', 'Estado do runtime local foi limpo');
+  }
+
+  function releaseAllForces() {
+    const count = Object.keys(forceStateRef.current).length;
+    setForceState({});
+    createRuntimeInfoEvent('memory.changed', 'watch-table', `${count} FORCE(s) liberados`);
+  }
+
   async function handleImportProject(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -541,6 +798,33 @@ function App() {
     });
   }
 
+  function navigateTo(item: NavItem) {
+    setActiveNavItem(item);
+    window.requestAnimationFrame(() => {
+      document.getElementById(sectionIdForNavItem(item))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function toggleIoPoint(id: string, field: 'state' | 'manualMode' | 'testMode') {
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const nextProject = {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        io: currentProject.io.map((point) => (point.id === id ? { ...point, [field]: !point[field] } : point))
+      };
+      const point = nextProject.io.find((item) => item.id === id);
+      if (point) {
+        createRuntimeInfoEvent('io.changed', point.address, `${point.address} ${field} = ${point[field] ? 'true' : 'false'}`, {
+          id,
+          field,
+          value: point[field]
+        });
+      }
+      return nextProject;
+    });
+  }
+
   function handlePresetChange(event: ChangeEvent<HTMLInputElement>) {
     const rawValue = event.target.value;
     const presetMs = rawValue.trim() === '' ? undefined : Number(rawValue);
@@ -593,7 +877,7 @@ function App() {
 
         <nav className="nav-list">
           {navItems.map((item) => (
-            <button className={item === 'Ladder' ? 'nav-item active' : 'nav-item'} key={item} type="button">
+            <button className={item === activeNavItem ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigateTo(item)} type="button">
               {item}
             </button>
           ))}
@@ -650,13 +934,15 @@ function App() {
             {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
           </button>
           <button type="button" onClick={() => runScanSimulation('manual')}>STEP</button>
+          <button type="button" onClick={resetRuntimeState}>Limpar runtime</button>
+          <button type="button" onClick={releaseAllForces}>Release forces</button>
           <button type="button" onClick={handleExportProject}>Exportar</button>
           <button type="button" onClick={() => fileInputRef.current?.click()}>Importar</button>
           <button type="button" onClick={resetProject}>Resetar</button>
           <input ref={fileInputRef} className="file-input" type="file" accept=".json,.endap.json,application/json" onChange={handleImportProject} />
         </section>
 
-        <section className="editor-layout">
+        <section className="editor-layout" id="ladder-section">
           <section className="ladder-panel" aria-label="Editor Ladder">
             <div className="ladder-header">
               <div>
@@ -757,6 +1043,24 @@ function App() {
               <h2>{selectedBlock ? selectedBlock.label : 'Nenhum bloco'}</h2>
             </div>
 
+            {selectedRung && (
+              <div className="rung-editor">
+                <label>
+                  <span>Rung</span>
+                  <input value={selectedRung.title} onChange={(event) => updateSelectedRung({ title: event.target.value })} />
+                </label>
+                <label>
+                  <span>Descrição</span>
+                  <input value={selectedRung.description} onChange={(event) => updateSelectedRung({ description: event.target.value })} />
+                </label>
+                <div className="property-actions three">
+                  <button type="button" onClick={() => moveSelectedRung(-1)}>Subir</button>
+                  <button type="button" onClick={() => moveSelectedRung(1)}>Descer</button>
+                  <button type="button" onClick={deleteSelectedRung}>Remover</button>
+                </div>
+              </div>
+            )}
+
             {selectedBlock ? (
               <div className="property-list">
                 <label>
@@ -817,6 +1121,11 @@ function App() {
                   <button type="button" onClick={() => saveProjectToStorage(project)}>Salvar local</button>
                   <button type="button" onClick={duplicateSelectedBlock}>Duplicar</button>
                 </div>
+                <div className="property-actions three">
+                  <button type="button" onClick={() => moveSelectedBlock(-1)}>Esquerda</button>
+                  <button type="button" onClick={() => moveSelectedBlock(1)}>Direita</button>
+                  <button type="button" onClick={deleteSelectedBlock}>Remover</button>
+                </div>
               </div>
             ) : (
               <p className="empty-copy">Toque em um contato, timer ou bobina para editar.</p>
@@ -833,8 +1142,21 @@ function App() {
 
         <section className="observability-layout" aria-label="Observabilidade e gateway">
           <RuntimeTimeline />
-          <GatewayContract settings={settings} onSettingsChange={updateSettings} onGatewayResult={handleGatewayResult} />
+          <ProjectHealthPanel issues={projectIssues} />
+          <div id="gateway-section">
+            <GatewayContract settings={settings} onSettingsChange={updateSettings} onGatewayResult={handleGatewayResult} />
+          </div>
         </section>
+
+        <FieldPanels
+          diagnostics={project.diagnostics}
+          failSafePolicies={project.failSafePolicies}
+          io={project.io}
+          nodes={project.nodes}
+          onToggleIoManual={(id) => toggleIoPoint(id, 'manualMode')}
+          onToggleIoState={(id) => toggleIoPoint(id, 'state')}
+          onToggleIoTest={(id) => toggleIoPoint(id, 'testMode')}
+        />
       </section>
     </main>
   );
