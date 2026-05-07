@@ -245,7 +245,7 @@ h2 {
 }
 
 .ladder-toolbar button:first-child,
-.ladder-toolbar button:nth-child(9) {
+.ladder-toolbar button:nth-child(10) {
   border-color: rgba(40, 214, 196, 0.52);
   background: linear-gradient(135deg, rgba(40, 214, 196, 0.24), rgba(16, 39, 43, 0.96));
 }
@@ -366,12 +366,16 @@ h2 {
 }
 
 .ladder-canvas.is-energized .rail,
-.ladder-canvas.is-energized .wire {
+.ladder-canvas.is-energized .wire,
+.ladder-canvas.is-energized .branch-wire,
+.ladder-canvas.is-energized .branch-path::before,
+.ladder-canvas.is-energized .branch-path::after {
   background: var(--green);
   box-shadow: 0 0 18px rgba(70, 230, 134, 0.62), 0 0 34px rgba(70, 230, 134, 0.22);
 }
 
-.ladder-canvas.is-energized .wire::after {
+.ladder-canvas.is-energized .wire::after,
+.ladder-canvas.is-energized .branch-wire::after {
   content: '';
   position: absolute;
   inset: -4px 0;
@@ -391,13 +395,103 @@ h2 {
 
 .block-row {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   min-width: max-content;
   gap: 18px;
   align-items: center;
   min-height: 124px;
   padding: 20px 54px;
+}
+
+.branch-stack {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  min-width: max-content;
+  padding: 0 54px 22px 54px;
+}
+
+.branch-stack::before,
+.branch-stack::after {
+  content: '';
+  position: absolute;
+  left: 42px;
+  width: 3px;
+  background: rgba(230, 247, 246, 0.58);
+}
+
+.branch-stack::before {
+  top: -42px;
+  height: 42px;
+}
+
+.branch-stack::after {
+  top: 18px;
+  bottom: 42px;
+}
+
+.ladder-canvas.is-energized .branch-stack::before,
+.ladder-canvas.is-energized .branch-stack::after {
+  background: var(--green);
+  box-shadow: 0 0 18px rgba(70, 230, 134, 0.54);
+}
+
+.branch-path {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 84px;
+  gap: 16px;
+  padding-left: 36px;
+}
+
+.branch-path::before,
+.branch-path::after {
+  content: '';
+  position: absolute;
+  height: 3px;
+  background: rgba(230, 247, 246, 0.58);
+}
+
+.branch-path::before {
+  left: -12px;
+  width: 48px;
+}
+
+.branch-path::after {
+  right: 24px;
+  width: 52px;
+}
+
+.branch-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid rgba(40, 214, 196, 0.28);
+  border-radius: 999px;
+  background: rgba(40, 214, 196, 0.1);
+  color: var(--cyan);
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.branch-wire {
+  position: relative;
+  flex: 1 0 64px;
+  height: 3px;
+  background: rgba(230, 247, 246, 0.58);
+}
+
+.branch-blocks {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: max-content;
 }
 
 .ladder-block {
@@ -684,5 +778,15 @@ h2 {
 
   .watch-dot {
     display: none;
+  }
+
+  .branch-stack {
+    padding-left: 44px;
+    padding-right: 44px;
+  }
+
+  .branch-path {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 }
