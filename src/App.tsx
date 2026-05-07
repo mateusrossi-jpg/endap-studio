@@ -14,6 +14,7 @@ const AUTO_SCAN_INTERVAL_MS = 200;
 const STEP_SCAN_DELTA_MS = 100;
 
 type RuntimeMode = 'STOP' | 'RUN';
+type MemoryMap = Record<string, boolean>;
 
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
@@ -23,18 +24,26 @@ function blockClass(block: EndapLadderBlock, selected: boolean) {
 function blockSymbol(block: EndapLadderBlock) {
   if (block.kind === 'contact-no') return '[ ]';
   if (block.kind === 'contact-nc') return '[/]';
+  if (block.kind === 'memory-contact-no') return '[M]';
+  if (block.kind === 'memory-contact-nc') return '[/M]';
   if (block.kind === 'timer-ton') return 'TON';
   if (block.kind === 'timer-tof') return 'TOF';
   if (block.kind === 'counter') return 'CTU';
+  if (block.kind === 'coil-set') return '(S)';
+  if (block.kind === 'coil-reset') return '(R)';
   return '( )';
 }
 
 function blockKindLabel(block: EndapLadderBlock) {
   if (block.kind === 'contact-no') return 'Contato normalmente aberto';
   if (block.kind === 'contact-nc') return 'Contato normalmente fechado';
+  if (block.kind === 'memory-contact-no') return 'Contato de memória NA';
+  if (block.kind === 'memory-contact-nc') return 'Contato de memória NF';
   if (block.kind === 'timer-ton') return 'Temporizador TON';
   if (block.kind === 'timer-tof') return 'Temporizador TOF';
   if (block.kind === 'counter') return 'Contador';
+  if (block.kind === 'coil-set') return 'Bobina SET retentiva';
+  if (block.kind === 'coil-reset') return 'Bobina RESET retentiva';
   return 'Bobina de saída';
 }
 
@@ -47,10 +56,14 @@ function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBloc
   const prefixByKind: Record<EndapLadderBlockKind, string> = {
     'contact-no': 'I',
     'contact-nc': 'I',
+    'memory-contact-no': 'M',
+    'memory-contact-nc': 'M',
     'timer-ton': 'T',
     'timer-tof': 'T',
     counter: 'C',
-    coil: 'Q'
+    coil: 'Q',
+    'coil-set': 'M',
+    'coil-reset': 'M'
   };
 
   const label = `${prefixByKind[kind]}${index}`;
@@ -66,10 +79,13 @@ function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBloc
   };
 }
 
-function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number): EndapLadderBlock[] {
+function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number, memory: MemoryMap) {
   let power = true;
+  const nextMemory: MemoryMap = { ...memory };
 
-  return blocks.map((block) => {
+  const nextBlocks = blocks.map((block) => {
+    const address = block.address ?? block.label;
+
     if (block.kind === 'contact-no') {
       power = power && block.active;
       return block;
@@ -78,6 +94,18 @@ function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number): EndapLadde
     if (block.kind === 'contact-nc') {
       power = power && !block.active;
       return block;
+    }
+
+    if (block.kind === 'memory-contact-no') {
+      const active = nextMemory[address] ?? false;
+      power = power && active;
+      return { ...block, active };
+    }
+
+    if (block.kind === 'memory-contact-nc') {
+      const active = !(nextMemory[address] ?? false);
+      power = power && active;
+      return { ...block, active };
     }
 
     if (block.kind === 'timer-ton') {
@@ -102,16 +130,28 @@ function simulateBlocks(blocks: EndapLadderBlock[], deltaMs: number): EndapLadde
       return { ...block, active };
     }
 
+    if (block.kind === 'coil-set') {
+      if (power) nextMemory[address] = true;
+      return { ...block, active: nextMemory[address] ?? false };
+    }
+
+    if (block.kind === 'coil-reset') {
+      if (power) nextMemory[address] = false;
+      return { ...block, active: !(nextMemory[address] ?? false) };
+    }
+
     if (block.kind === 'coil') {
       return { ...block, active: power };
     }
 
     return block;
   });
+
+  return { blocks: nextBlocks, memory: nextMemory };
 }
 
 function rungIsEnergized(blocks: EndapLadderBlock[]) {
-  return blocks.some((block) => block.kind === 'coil' && block.active);
+  return blocks.some((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind) && block.active);
 }
 
 function App() {
@@ -121,6 +161,7 @@ function App() {
   const [storageStatus, setStorageStatus] = useState('Carregando projeto local...');
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('STOP');
   const [scanCount, setScanCount] = useState(0);
+  const [memoryMap, setMemoryMap] = useState<MemoryMap>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -274,10 +315,14 @@ function App() {
   function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
-      const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => ({
-        ...rung,
-        blocks: simulateBlocks(rung.blocks, deltaMs)
-      }));
+      let nextMemory = memoryMap;
+      const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
+        const result = simulateBlocks(rung.blocks, deltaMs, nextMemory);
+        nextMemory = result.memory;
+        return { ...rung, blocks: result.blocks };
+      });
+
+      setMemoryMap(nextMemory);
 
       return {
         ...currentProject,
@@ -296,6 +341,7 @@ function App() {
   function resetProject() {
     setRuntimeMode('STOP');
     setScanCount(0);
+    setMemoryMap({});
     clearStoredProject();
     getMockProject().then((loadedProject) => {
       const refreshedProject = { ...loadedProject, updatedAt: new Date().toISOString() };
@@ -313,6 +359,7 @@ function App() {
     try {
       const importedProject = await importProjectFromFile(file);
       setRuntimeMode('STOP');
+      setMemoryMap({});
       setProject({ ...importedProject, updatedAt: new Date().toISOString() });
       setSelectedRungId(importedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(importedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
@@ -347,6 +394,7 @@ function App() {
   const onlineNodes = project.nodes.filter((node) => node.status === 'online').length;
   const activeAlerts = project.alerts.filter((alert) => !alert.acknowledged).length;
   const outputCount = project.io.filter((point) => point.direction === 'output').length;
+  const activeMemories = Object.entries(memoryMap).filter(([, value]) => value).length;
 
   return (
     <main className="app-shell">
@@ -392,14 +440,14 @@ function App() {
             <small>{scanCount} ciclos simulados</small>
           </article>
           <article className="metric-card warning">
-            <span>Alertas</span>
-            <strong>{activeAlerts} ativo</strong>
-            <small>{project.nodes.length - onlineNodes} nó fora do normal</small>
+            <span>Memórias</span>
+            <strong>{activeMemories} ativas</strong>
+            <small>{Object.keys(memoryMap).length} registradas</small>
           </article>
           <article className="metric-card">
             <span>I/O</span>
             <strong>{project.io.length} pontos</strong>
-            <small>{outputCount} saídas</small>
+            <small>{outputCount} saídas · {activeAlerts} alerta</small>
           </article>
         </section>
 
@@ -407,7 +455,10 @@ function App() {
           <button type="button" onClick={addRung}>+ Rung</button>
           <button type="button" onClick={() => addBlock('contact-no')}>+ Contato NA</button>
           <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
+          <button type="button" onClick={() => addBlock('memory-contact-no')}>+ Memória</button>
           <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
+          <button type="button" onClick={() => addBlock('coil-set')}>+ SET</button>
+          <button type="button" onClick={() => addBlock('coil-reset')}>+ RESET</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
           <button type="button" onClick={() => setRuntimeMode((current) => (current === 'RUN' ? 'STOP' : 'RUN'))}>
             {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
@@ -496,6 +547,10 @@ function App() {
                 <label>
                   <span>Estado</span>
                   <input readOnly value={selectedBlock.active ? 'Ativo / Energizado' : 'Inativo'} />
+                </label>
+                <label>
+                  <span>Memória atual</span>
+                  <input readOnly value={memoryMap[selectedBlock.address ?? selectedBlock.label] ? 'SET / true' : 'RESET / false'} />
                 </label>
                 <label>
                   <span>Elapsed ms</span>
