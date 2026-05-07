@@ -124,11 +124,18 @@ export type EndapLadderBlock = {
   elapsedMs?: number;
 };
 
+export type EndapLadderBranch = {
+  id: string;
+  title?: string;
+  blocks: EndapLadderBlock[];
+};
+
 export type EndapLadderRung = {
   id: string;
   title: string;
   description: string;
   blocks: EndapLadderBlock[];
+  branches?: EndapLadderBranch[];
 };
 
 export type EndapLadderProgram = {
