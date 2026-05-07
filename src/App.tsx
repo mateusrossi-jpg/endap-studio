@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { getMockProject } from './services/mockEndapApi';
-import { EndapLadderBlock, EndapProject } from './types/endap';
+import { EndapLadderBlock, EndapLadderBlockKind, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 
@@ -27,13 +27,37 @@ function blockKindLabel(block: EndapLadderBlock) {
   return 'Bobina de saída';
 }
 
+function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
+  const prefixByKind: Record<EndapLadderBlockKind, string> = {
+    'contact-no': 'I',
+    'contact-nc': 'I',
+    'timer-ton': 'T',
+    'timer-tof': 'T',
+    counter: 'C',
+    coil: 'Q'
+  };
+
+  const label = `${prefixByKind[kind]}${index}`;
+
+  return {
+    id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    kind,
+    label,
+    address: label,
+    active: false,
+    presetMs: kind.startsWith('timer') ? 1000 : undefined
+  };
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [selectedRungId, setSelectedRungId] = useState<string | null>(null);
 
   useEffect(() => {
     getMockProject().then((loadedProject) => {
       setProject(loadedProject);
+      setSelectedRungId(loadedProject.ladderProgram.rungs[0]?.id ?? null);
       setSelectedBlockId(loadedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
     });
   }, []);
@@ -58,6 +82,95 @@ function App() {
             ...rung,
             blocks: rung.blocks.map((block) => (block.id === selectedBlockId ? { ...block, ...patch } : block))
           }))
+        }
+      };
+    });
+  }
+
+  function addBlock(kind: EndapLadderBlockKind) {
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
+      if (!targetRungId) return currentProject;
+
+      const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + rung.blocks.length, 0) + 1;
+      const newBlock = createBlock(kind, nextIndex);
+      setSelectedBlockId(newBlock.id);
+      setSelectedRungId(targetRungId);
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: currentProject.ladderProgram.rungs.map((rung) =>
+            rung.id === targetRungId ? { ...rung, blocks: [...rung.blocks, newBlock] } : rung
+          )
+        }
+      };
+    });
+  }
+
+  function addRung() {
+    const newBlock = createBlock('contact-no', (project?.ladderProgram.rungs.length ?? 0) + 10);
+    const newRungId = `rung-${Date.now()}`;
+
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const nextNumber = currentProject.ladderProgram.rungs.length + 1;
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: [
+            ...currentProject.ladderProgram.rungs,
+            {
+              id: newRungId,
+              title: `Nova lógica ${nextNumber}`,
+              description: 'Rung criada no editor mobile-first.',
+              blocks: [newBlock]
+            }
+          ]
+        }
+      };
+    });
+
+    setSelectedRungId(newRungId);
+    setSelectedBlockId(newBlock.id);
+  }
+
+  function duplicateSelectedBlock() {
+    if (!selectedBlockId) return;
+
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      let duplicatedBlock: EndapLadderBlock | null = null;
+
+      const rungs = currentProject.ladderProgram.rungs.map((rung) => {
+        const blockIndex = rung.blocks.findIndex((block) => block.id === selectedBlockId);
+        if (blockIndex === -1) return rung;
+
+        duplicatedBlock = {
+          ...rung.blocks[blockIndex],
+          id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          label: `${rung.blocks[blockIndex].label}_copy`
+        };
+
+        const blocks = [...rung.blocks];
+        blocks.splice(blockIndex + 1, 0, duplicatedBlock);
+        setSelectedRungId(rung.id);
+        return { ...rung, blocks };
+      });
+
+      if (duplicatedBlock) setSelectedBlockId(duplicatedBlock.id);
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs
         }
       };
     });
@@ -143,10 +256,11 @@ function App() {
         </section>
 
         <section className="ladder-toolbar" aria-label="Ferramentas Ladder">
-          <button type="button">+ Rung</button>
-          <button type="button">+ Contato</button>
-          <button type="button">+ Bobina</button>
-          <button type="button">+ Timer</button>
+          <button type="button" onClick={addRung}>+ Rung</button>
+          <button type="button" onClick={() => addBlock('contact-no')}>+ Contato NA</button>
+          <button type="button" onClick={() => addBlock('contact-nc')}>+ Contato NF</button>
+          <button type="button" onClick={() => addBlock('coil')}>+ Bobina</button>
+          <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
           <button type="button">Simular</button>
         </section>
 
@@ -162,12 +276,12 @@ function App() {
 
             <div className="rung-list">
               {project.ladderProgram.rungs.map((rung, index) => (
-                <article className="rung-card" key={rung.id}>
-                  <div className="rung-meta">
+                <article className={`rung-card ${selectedRungId === rung.id ? 'is-rung-selected' : ''}`} key={rung.id}>
+                  <button className="rung-meta" onClick={() => setSelectedRungId(rung.id)} type="button">
                     <strong>Rung {index + 1}</strong>
                     <span>{rung.title}</span>
                     <small>{rung.description}</small>
-                  </div>
+                  </button>
 
                   <div className="ladder-canvas" role="group" aria-label={rung.title}>
                     <div className="rail left" />
@@ -179,7 +293,10 @@ function App() {
                         <button
                           className={blockClass(block, selectedBlockId === block.id)}
                           key={block.id}
-                          onClick={() => setSelectedBlockId(block.id)}
+                          onClick={() => {
+                            setSelectedRungId(rung.id);
+                            setSelectedBlockId(block.id);
+                          }}
                           type="button"
                         >
                           <span className="block-symbol">{blockSymbol(block)}</span>
@@ -231,7 +348,7 @@ function App() {
 
                 <div className="property-actions">
                   <button type="button">Salvar mock</button>
-                  <button type="button">Duplicar</button>
+                  <button type="button" onClick={duplicateSelectedBlock}>Duplicar</button>
                 </div>
               </div>
             ) : (
