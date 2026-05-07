@@ -16,6 +16,13 @@ const STEP_SCAN_DELTA_MS = 100;
 type RuntimeMode = 'STOP' | 'RUN';
 type MemoryMap = Record<string, boolean>;
 
+type WatchItem = {
+  address: string;
+  type: 'MEM' | 'TIMER' | 'COIL';
+  value: string;
+  active: boolean;
+};
+
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
   return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
@@ -154,6 +161,37 @@ function rungIsEnergized(blocks: EndapLadderBlock[]) {
   return blocks.some((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind) && block.active);
 }
 
+function createWatchItems(project: EndapProject, memoryMap: MemoryMap): WatchItem[] {
+  const timerItems = project.ladderProgram.rungs
+    .flatMap((rung) => rung.blocks)
+    .filter((block) => block.kind.startsWith('timer'))
+    .map((block) => ({
+      address: block.address ?? block.label,
+      type: 'TIMER' as const,
+      value: `${block.elapsedMs ?? 0}/${block.presetMs ?? 0} ms`,
+      active: block.active
+    }));
+
+  const coilItems = project.ladderProgram.rungs
+    .flatMap((rung) => rung.blocks)
+    .filter((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind))
+    .map((block) => ({
+      address: block.address ?? block.label,
+      type: 'COIL' as const,
+      value: block.active ? 'true' : 'false',
+      active: block.active
+    }));
+
+  const memoryItems = Object.entries(memoryMap).map(([address, value]) => ({
+    address,
+    type: 'MEM' as const,
+    value: value ? 'true' : 'false',
+    active: value
+  }));
+
+  return [...memoryItems, ...timerItems, ...coilItems];
+}
+
 function App() {
   const [project, setProject] = useState<EndapProject | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -202,6 +240,8 @@ function App() {
     if (!project || !selectedBlockId) return null;
     return project.ladderProgram.rungs.flatMap((rung) => rung.blocks).find((block) => block.id === selectedBlockId) ?? null;
   }, [project, selectedBlockId]);
+
+  const watchItems = useMemo(() => (project ? createWatchItems(project, memoryMap) : []), [project, memoryMap]);
 
   function updateSelectedBlock(patch: Partial<EndapLadderBlock>) {
     if (!selectedBlockId) return;
@@ -576,6 +616,27 @@ function App() {
             ) : (
               <p className="empty-copy">Toque em um contato, timer ou bobina para editar.</p>
             )}
+
+            <div className="watch-panel">
+              <div className="watch-header">
+                <p className="eyebrow">Watch table</p>
+                <strong>{watchItems.length} variáveis</strong>
+              </div>
+              {watchItems.length === 0 ? (
+                <p className="empty-copy">Execute o runtime para popular memórias, timers e bobinas.</p>
+              ) : (
+                <div className="watch-list">
+                  {watchItems.map((item) => (
+                    <div className="watch-row" key={`${item.type}-${item.address}`}>
+                      <span className={`watch-dot ${item.active ? 'is-active' : ''}`} />
+                      <strong>{item.address}</strong>
+                      <small>{item.type}</small>
+                      <code>{item.value}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </aside>
         </section>
       </section>
