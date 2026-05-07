@@ -747,6 +747,7 @@ h2 {
 .health-panel,
 .gateway-panel,
 .snapshot-panel,
+.deployment-panel,
 .field-panel {
   border: 1px solid var(--line);
   border-radius: 26px;
@@ -933,7 +934,11 @@ h2 {
 }
 
 .snapshot-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.65fr);
+  gap: 14px;
   margin-top: 14px;
+  align-items: start;
 }
 
 .snapshot-list {
@@ -960,6 +965,29 @@ h2 {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.deployment-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px;
+}
+
+.deployment-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(110, 231, 221, 0.14);
+  border-radius: 14px;
+  background: rgba(7, 17, 19, 0.46);
+}
+
+.deployment-grid span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .field-layout {
@@ -1043,6 +1071,10 @@ h2 {
 
   .field-layout {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .snapshot-layout {
+    grid-template-columns: 1fr;
   }
 
   .property-panel {
@@ -1132,6 +1164,7 @@ h2 {
   .watch-row,
   .io-row,
   .snapshot-row,
+  .deployment-grid,
   .field-layout,
   .timeline-row,
   .settings-grid {

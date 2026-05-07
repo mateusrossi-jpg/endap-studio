@@ -13,6 +13,7 @@
 - Painel de validação local com falhas, avisos e itens informativos antes de exportar ou integrar gateway.
 - Painéis locais de I/O, nós, fail-safe e diagnóstico, com toggles mockados para estado/manual/teste de I/O.
 - Snapshots locais versionados para salvar, restaurar e remover marcos do projeto sem cloud.
+- Painel de deploy local/gateway com bloqueio por falhas de validação e envio via contrato de backup.
 - Settings locais persistidos em `localStorage`: modo API, base URL, tema preparado e auto-save.
 
 ## Ladder editor
@@ -62,6 +63,7 @@
 - A camada `src/services/endapApi.ts` segue separando modo `mock` e `gateway`.
 - Em modo mock, o teste de conexão retorna dados simulados.
 - Em modo gateway, o teste usa `GET /api/system/info` e não trava a UI se a conexão falhar.
+- O deploy usa `POST /api/backup/import` em modo gateway e valida localmente em modo mock.
 - A timeline e o contrato de endpoints deixam o app pronto para receber eventos REST/WebSocket reais.
 
 ## Endpoints previstos

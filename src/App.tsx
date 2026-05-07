@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DeploymentPanel } from './components/DeploymentPanel';
 import { FieldPanels } from './components/FieldPanels';
 import { GatewayContract } from './components/GatewayContract';
 import { ProjectHealthPanel, ProjectIssue } from './components/ProjectHealthPanel';
@@ -830,6 +831,17 @@ function App() {
     });
   }
 
+  function handleDeployResult(ok: boolean, message: string) {
+    if (ok) {
+      createRuntimeInfoEvent('gateway.connected', 'deploy', message, { mode: settings.apiMode });
+      setStorageStatus(message);
+      return;
+    }
+
+    createRuntimeWarningEvent('gateway.disconnected', 'deploy', message, { mode: settings.apiMode });
+    setStorageStatus(message);
+  }
+
   function navigateTo(item: NavItem) {
     setActiveNavItem(item);
     window.requestAnimationFrame(() => {
@@ -1187,6 +1199,7 @@ function App() {
             onDeleteSnapshot={removeSnapshot}
             onRestoreSnapshot={restoreSnapshot}
           />
+          <DeploymentPanel issues={projectIssues} project={project} settings={settings} onDeployResult={handleDeployResult} />
         </section>
 
         <FieldPanels
