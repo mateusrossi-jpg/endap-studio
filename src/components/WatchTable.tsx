@@ -1,6 +1,6 @@
 export type WatchItem = {
   address: string;
-  type: 'MEM' | 'TIMER' | 'COIL';
+  type: 'MEM' | 'TIMER' | 'COUNTER' | 'COIL';
   value: string;
   active: boolean;
   force?: 'on' | 'off';

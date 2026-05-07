@@ -8,6 +8,7 @@
 - RUN, STOP e STEP para scan Ladder simulado.
 - Runtime Timeline com eventos de modo, step, scans amostrados, memória, timers, coils, branches, projeto e gateway.
 - Watch Table com estados de memória, timers e coils, alternância manual de memórias e FORCE ON/OFF/Release básico.
+- CTU básico com preset, acumulador, detecção de borda de subida e visualização na Watch Table.
 - Painel Gateway / Firmware Contract com modo mock/gateway, base URL, endpoints previstos, status e teste de conexão.
 - Settings locais persistidos em `localStorage`: modo API, base URL, tema preparado e auto-save.
 
@@ -27,7 +28,7 @@
   - `coil-reset`
 - Branch OR visual com energização por branch.
 - Avaliação simples de rung com OR entre caminho principal e branches paralelos, sem nested branches avançados.
-- TON, TOF, SET e RESET continuam simulados localmente.
+- TON, TOF, CTU, SET e RESET continuam simulados localmente.
 
 ## Runtime mock
 
@@ -35,6 +36,7 @@
 - O scan automático publica eventos de forma limitada para evitar excesso de timeline.
 - Mudanças relevantes de memória, coil, timer e branch publicam eventos no `RuntimeEventBus`.
 - FORCE é somente local/simulado e foi modelado para futura integração com gateway real.
+- O motor Ladder fica isolado em `src/services/ladderRuntime.ts` e possui testes unitários para TON, OR branch, SET/RESET e CTU.
 
 ## Persistência
 
@@ -77,15 +79,13 @@
 ## Limitações atuais
 
 - Sem nested branches ou edição estrutural avançada de caminhos paralelos.
-- Contadores ainda são representados como bloco visual/simulado básico.
+- Contadores CTU possuem preset/acumulador simples, mas ainda não têm entrada dedicada de reset no Ladder.
 - FORCE não persiste como contrato de firmware e não escreve no gateway real.
 - Tema light está preparado em settings, mas o produto segue dark por padrão.
-- Ainda não há testes automatizados de runtime Ladder.
 
 ## Próximos passos
 
-- Criar testes unitários para `evaluatePath`/`evaluateRung`.
-- Modelar contador CTU com preset, acumulador e reset.
+- Modelar reset dedicado para CTU.
 - Persistir FORCE em estrutura separada se o fluxo de diagnóstico exigir retomada de sessão.
 - Conectar `RuntimeEventBus` a `WS /api/events` quando o gateway real estabilizar o contrato.
 - Separar `LadderBlock`, `LadderRung` e `PropertyPanel` quando o editor ganhar edição de topologia mais avançada.

@@ -122,6 +122,9 @@ export type EndapLadderBlock = {
   active: boolean;
   presetMs?: number;
   elapsedMs?: number;
+  presetCount?: number;
+  accumulatedCount?: number;
+  previousInput?: boolean;
 };
 
 export type EndapLadderBranch = {

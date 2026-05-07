@@ -261,7 +261,7 @@ h2 {
 }
 
 .ladder-toolbar button:first-child,
-.ladder-toolbar button:nth-child(10) {
+.ladder-toolbar button:nth-child(11) {
   border-color: rgba(40, 214, 196, 0.52);
   background: linear-gradient(135deg, rgba(40, 214, 196, 0.24), rgba(16, 39, 43, 0.96));
 }
@@ -547,7 +547,8 @@ h2 {
 
 .ladder-block.timer,
 .ladder-block.timer-ton,
-.ladder-block.timer-tof {
+.ladder-block.timer-tof,
+.ladder-block.counter {
   border-color: rgba(255, 202, 95, 0.46);
 }
 

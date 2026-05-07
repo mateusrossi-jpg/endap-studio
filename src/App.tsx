@@ -4,6 +4,21 @@ import { RuntimeTimeline } from './components/RuntimeTimeline';
 import { WatchItem, WatchTable } from './components/WatchTable';
 import { getMockProject } from './services/mockEndapApi';
 import {
+  branchIsEnergized,
+  collectBranchStates,
+  collectCoilStates,
+  collectCounterDoneStates,
+  collectTimerDoneStates,
+  createBlock,
+  evaluateRung,
+  ForceState,
+  ForceTarget,
+  getAddress,
+  getAllRungBlocks,
+  MemoryMap,
+  rungIsEnergized
+} from './services/ladderRuntime';
+import {
   createGatewayEvent,
   createMemoryChangedEvent,
   createModeChangedEvent,
@@ -21,17 +36,13 @@ import {
   saveStudioSettings,
   StudioSettings
 } from './services/storage';
-import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapLadderRung, EndapProject } from './types/endap';
+import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from './types/endap';
 
 const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico'];
 const AUTO_SCAN_INTERVAL_MS = 200;
 const STEP_SCAN_DELTA_MS = 100;
 
 type RuntimeMode = 'STOP' | 'RUN';
-type MemoryMap = Record<string, boolean>;
-type ForceTarget = 'on' | 'off';
-type ForceState = Record<string, { target: ForceTarget; source: 'manual'; updatedAt: string }>;
-
 function blockClass(block: EndapLadderBlock, selected: boolean) {
   const cssKind = block.kind.replace('timer-', 'timer-');
   return `ladder-block ${cssKind} ${block.active ? 'is-active' : ''} ${selected ? 'is-selected' : ''}`;
@@ -68,160 +79,10 @@ function timerProgress(block: EndapLadderBlock) {
   return Math.min(100, Math.round(((block.elapsedMs ?? 0) / block.presetMs) * 100));
 }
 
-function getAllRungBlocks(rung: { blocks: EndapLadderBlock[]; branches?: EndapLadderBranch[] }) {
-  return [...rung.blocks, ...(rung.branches ?? []).flatMap((branch) => branch.blocks)];
-}
-
-function branchIsEnergized(branch: EndapLadderBranch) {
-  return branch.blocks.length > 0 && branch.blocks.every((block) => block.active);
-}
-
-function isOutputBlock(block: EndapLadderBlock) {
-  return ['coil', 'coil-set', 'coil-reset'].includes(block.kind);
-}
-
-function getAddress(block: EndapLadderBlock) {
-  return block.address ?? block.label;
-}
-
-function readForcedValue(address: string, memory: MemoryMap, forceState: ForceState) {
-  const forced = forceState[address]?.target;
-  if (forced) return forced === 'on';
-  return memory[address] ?? false;
-}
-
-function createBlock(kind: EndapLadderBlockKind, index: number): EndapLadderBlock {
-  const prefixByKind: Record<EndapLadderBlockKind, string> = {
-    'contact-no': 'I',
-    'contact-nc': 'I',
-    'memory-contact-no': 'M',
-    'memory-contact-nc': 'M',
-    'timer-ton': 'T',
-    'timer-tof': 'T',
-    counter: 'C',
-    coil: 'Q',
-    'coil-set': 'M',
-    'coil-reset': 'M'
-  };
-
-  const label = `${prefixByKind[kind]}${index}`;
-
-  return {
-    id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    kind,
-    label,
-    address: label,
-    active: false,
-    presetMs: kind.startsWith('timer') ? 1000 : undefined,
-    elapsedMs: kind.startsWith('timer') ? 0 : undefined
-  };
-}
-
-function evaluatePath(blocks: EndapLadderBlock[], deltaMs: number, memory: MemoryMap, forceState: ForceState, inputPower = true) {
-  let power = inputPower;
-  const nextMemory: MemoryMap = { ...memory };
-
-  const nextBlocks = blocks.map((block) => {
-    const address = getAddress(block);
-    const forcedValue = forceState[address]?.target;
-
-    if (block.kind === 'contact-no') {
-      power = power && block.active;
-      return block;
-    }
-
-    if (block.kind === 'contact-nc') {
-      power = power && !block.active;
-      return block;
-    }
-
-    if (block.kind === 'memory-contact-no') {
-      const active = readForcedValue(address, nextMemory, forceState);
-      power = power && active;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'memory-contact-nc') {
-      const active = !readForcedValue(address, nextMemory, forceState);
-      power = power && active;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'timer-ton') {
-      const presetMs = block.presetMs ?? 1000;
-      const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
-      const active = elapsedMs >= presetMs;
-      power = power && active;
-      return { ...block, elapsedMs, active };
-    }
-
-    if (block.kind === 'timer-tof') {
-      const presetMs = block.presetMs ?? 1000;
-      const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
-      const active = power || elapsedMs < presetMs;
-      power = active;
-      return { ...block, elapsedMs, active };
-    }
-
-    if (block.kind === 'counter') {
-      const active = power;
-      power = power && active;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'coil-set') {
-      if (power) nextMemory[address] = true;
-      const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'coil-reset') {
-      if (power) nextMemory[address] = false;
-      const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
-      return { ...block, active };
-    }
-
-    if (block.kind === 'coil') {
-      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
-    }
-
-    return block;
-  });
-
-  return { blocks: nextBlocks, memory: nextMemory };
-}
-
-function rungIsEnergized(blocks: EndapLadderBlock[]) {
-  return blocks.some((block) => ['coil', 'coil-set', 'coil-reset'].includes(block.kind) && block.active);
-}
-
-function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: MemoryMap, forceState: ForceState) {
-  let nextMemory = memory;
-  const firstOutputIndex = rung.blocks.findIndex(isOutputBlock);
-  const conditionBlocks = firstOutputIndex === -1 ? rung.blocks : rung.blocks.slice(0, firstOutputIndex);
-  const outputBlocks = firstOutputIndex === -1 ? [] : rung.blocks.slice(firstOutputIndex);
-  const mainResult = evaluatePath(conditionBlocks, deltaMs, nextMemory, forceState);
-  nextMemory = mainResult.memory;
-
-  const branches = rung.branches?.map((branch) => {
-    const branchResult = evaluatePath(branch.blocks, deltaMs, nextMemory, forceState);
-    nextMemory = branchResult.memory;
-    return { ...branch, blocks: branchResult.blocks };
-  });
-
-  const branchPower = branches?.some((branch) => branch.blocks.length > 0 && branch.blocks.every((block) => block.active)) ?? false;
-  const rungPower = mainResult.blocks.length === 0 ? branchPower : mainResult.blocks.every((block) => block.active) || branchPower;
-  const outputResult = evaluatePath(outputBlocks, deltaMs, nextMemory, forceState, rungPower);
-  nextMemory = outputResult.memory;
-
-  return {
-    rung: {
-      ...rung,
-      blocks: [...mainResult.blocks, ...outputResult.blocks],
-      branches
-    },
-    memory: nextMemory
-  };
+function counterProgress(block: EndapLadderBlock) {
+  const presetCount = block.presetCount ?? 1;
+  if (presetCount <= 0) return 0;
+  return Math.min(100, Math.round(((block.accumulatedCount ?? 0) / presetCount) * 100));
 }
 
 function createWatchItems(project: EndapProject, memoryMap: MemoryMap, forceState: ForceState): WatchItem[] {
@@ -233,6 +94,18 @@ function createWatchItems(project: EndapProject, memoryMap: MemoryMap, forceStat
       address: block.address ?? block.label,
       type: 'TIMER' as const,
       value: `${block.elapsedMs ?? 0}/${block.presetMs ?? 0} ms`,
+      active: block.active,
+      force: undefined,
+      canToggle: false,
+      canForce: false
+    }));
+
+  const counterItems = allBlocks
+    .filter((block) => block.kind === 'counter')
+    .map((block) => ({
+      address: block.address ?? block.label,
+      type: 'COUNTER' as const,
+      value: `${block.accumulatedCount ?? 0}/${block.presetCount ?? 1}`,
       active: block.active,
       force: undefined,
       canToggle: false,
@@ -261,33 +134,7 @@ function createWatchItems(project: EndapProject, memoryMap: MemoryMap, forceStat
     canForce: true
   }));
 
-  return [...memoryItems, ...timerItems, ...coilItems];
-}
-
-function collectCoilStates(project: EndapProject): MemoryMap {
-  return Object.fromEntries(
-    project.ladderProgram.rungs
-      .flatMap(getAllRungBlocks)
-      .filter(isOutputBlock)
-      .map((block) => [getAddress(block), block.active])
-  );
-}
-
-function collectTimerDoneStates(project: EndapProject): MemoryMap {
-  return Object.fromEntries(
-    project.ladderProgram.rungs
-      .flatMap(getAllRungBlocks)
-      .filter((block) => block.kind.startsWith('timer'))
-      .map((block) => [getAddress(block), block.active])
-  );
-}
-
-function collectBranchStates(project: EndapProject): MemoryMap {
-  return Object.fromEntries(
-    project.ladderProgram.rungs.flatMap((rung) =>
-      (rung.branches ?? []).map((branch) => [branch.id, branchIsEnergized(branch)] as const)
-    )
-  );
+  return [...memoryItems, ...timerItems, ...counterItems, ...coilItems];
 }
 
 function publishBooleanDiff(
@@ -561,6 +408,7 @@ function App() {
       const previousMemory = memoryMapRef.current;
       const previousCoils = collectCoilStates(currentProject);
       const previousTimers = collectTimerDoneStates(currentProject);
+      const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
       let nextMemory = previousMemory;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
@@ -587,6 +435,9 @@ function App() {
       });
       publishBooleanDiff(previousTimers, collectTimerDoneStates(nextProject), (address, value) => {
         createRuntimeInfoEvent('timer.changed', address, `${address} ${value ? 'completou preset' : 'reiniciou'}`, { address, done: value });
+      });
+      publishBooleanDiff(previousCounters, collectCounterDoneStates(nextProject), (address, value) => {
+        createRuntimeInfoEvent('ladder.block_changed', address, `${address} ${value ? 'atingiu preset' : 'abaixo do preset'}`, { address, done: value });
       });
       publishBooleanDiff(previousBranches, collectBranchStates(nextProject), (address, value) => {
         createRuntimeInfoEvent('ladder.branch_changed', address, `${address} ${value ? 'ativada' : 'desativada'}`, { branchId: address, active: value });
@@ -696,6 +547,20 @@ function App() {
     updateSelectedBlock({ presetMs: Number.isNaN(presetMs) ? undefined : presetMs, elapsedMs: 0 });
   }
 
+  function handlePresetCountChange(event: ChangeEvent<HTMLInputElement>) {
+    const rawValue = event.target.value;
+    const presetCount = rawValue.trim() === '' ? undefined : Number(rawValue);
+    updateSelectedBlock({
+      presetCount: Number.isNaN(presetCount) ? undefined : Math.max(1, Math.floor(presetCount ?? 1)),
+      accumulatedCount: 0,
+      previousInput: false
+    });
+  }
+
+  function resetSelectedCounter() {
+    updateSelectedBlock({ accumulatedCount: 0, previousInput: false, active: false });
+  }
+
   if (!project) {
     return (
       <main className="loading-screen">
@@ -780,6 +645,7 @@ function App() {
           <button type="button" onClick={() => addBlock('coil-set')}>+ SET</button>
           <button type="button" onClick={() => addBlock('coil-reset')}>+ RESET</button>
           <button type="button" onClick={() => addBlock('timer-ton')}>+ Timer</button>
+          <button type="button" onClick={() => addBlock('counter')}>+ CTU</button>
           <button type="button" onClick={toggleRuntimeMode}>
             {runtimeMode === 'RUN' ? 'STOP' : 'RUN'}
           </button>
@@ -836,6 +702,14 @@ function App() {
                               </span>
                             </span>
                           )}
+                          {block.kind === 'counter' && (
+                            <span className="timer-readout">
+                              ACC {block.accumulatedCount ?? 0} / PV {block.presetCount ?? 1}
+                              <span className="timer-track">
+                                <span className="timer-progress" style={{ width: `${counterProgress(block)}%` }} />
+                              </span>
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -859,6 +733,11 @@ function App() {
                                 >
                                   <span className="block-symbol">{blockSymbol(block)}</span>
                                   <strong>{block.label}</strong>
+                                  {block.kind === 'counter' && (
+                                    <span className="timer-readout">
+                                      ACC {block.accumulatedCount ?? 0} / PV {block.presetCount ?? 1}
+                                    </span>
+                                  )}
                                 </button>
                               ))}
                             </div>
@@ -908,6 +787,24 @@ function App() {
                   <span>Preset ms</span>
                   <input inputMode="numeric" value={selectedBlock.presetMs ?? ''} onChange={handlePresetChange} />
                 </label>
+                {selectedBlock.kind === 'counter' && (
+                  <>
+                    <label>
+                      <span>Preset contagem</span>
+                      <input inputMode="numeric" value={selectedBlock.presetCount ?? 1} onChange={handlePresetCountChange} />
+                    </label>
+                    <label>
+                      <span>Acumulado</span>
+                      <input readOnly value={selectedBlock.accumulatedCount ?? 0} />
+                    </label>
+                    <div className="state-toggle">
+                      <span>Contador</span>
+                      <button type="button" onClick={resetSelectedCounter}>
+                        Resetar acumulado
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 <div className="state-toggle">
                   <span>Simulação</span>
