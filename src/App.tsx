@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { getMockProject } from './services/mockEndapApi';
 import { EndapLadderBlock, EndapProject } from './types/endap';
 
@@ -42,6 +42,32 @@ function App() {
     if (!project || !selectedBlockId) return null;
     return project.ladderProgram.rungs.flatMap((rung) => rung.blocks).find((block) => block.id === selectedBlockId) ?? null;
   }, [project, selectedBlockId]);
+
+  function updateSelectedBlock(patch: Partial<EndapLadderBlock>) {
+    if (!selectedBlockId) return;
+
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: currentProject.ladderProgram.rungs.map((rung) => ({
+            ...rung,
+            blocks: rung.blocks.map((block) => (block.id === selectedBlockId ? { ...block, ...patch } : block))
+          }))
+        }
+      };
+    });
+  }
+
+  function handlePresetChange(event: ChangeEvent<HTMLInputElement>) {
+    const rawValue = event.target.value;
+    const presetMs = rawValue.trim() === '' ? undefined : Number(rawValue);
+    updateSelectedBlock({ presetMs: Number.isNaN(presetMs) ? undefined : presetMs });
+  }
 
   if (!project) {
     return (
@@ -180,20 +206,31 @@ function App() {
                   <input readOnly value={blockKindLabel(selectedBlock)} />
                 </label>
                 <label>
+                  <span>Label</span>
+                  <input value={selectedBlock.label} onChange={(event) => updateSelectedBlock({ label: event.target.value })} />
+                </label>
+                <label>
                   <span>Endereço</span>
-                  <input readOnly value={selectedBlock.address ?? 'sem endereço'} />
+                  <input value={selectedBlock.address ?? ''} onChange={(event) => updateSelectedBlock({ address: event.target.value })} />
                 </label>
                 <label>
                   <span>Estado</span>
                   <input readOnly value={selectedBlock.active ? 'Ativo / Energizado' : 'Inativo'} />
                 </label>
                 <label>
-                  <span>Preset</span>
-                  <input readOnly value={selectedBlock.presetMs ? `${selectedBlock.presetMs} ms` : 'não aplicado'} />
+                  <span>Preset ms</span>
+                  <input inputMode="numeric" value={selectedBlock.presetMs ?? ''} onChange={handlePresetChange} />
                 </label>
 
+                <div className="state-toggle">
+                  <span>Simulação</span>
+                  <button type="button" onClick={() => updateSelectedBlock({ active: !selectedBlock.active })}>
+                    {selectedBlock.active ? 'Desenergizar' : 'Energizar'}
+                  </button>
+                </div>
+
                 <div className="property-actions">
-                  <button type="button">Editar</button>
+                  <button type="button">Salvar mock</button>
                   <button type="button">Duplicar</button>
                 </div>
               </div>
