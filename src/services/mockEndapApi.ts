@@ -235,7 +235,16 @@ export const mockProject: EndapProject = {
   alerts,
   diagnostics,
   automationRules,
-  ladderProgram
+  ladderProgram,
+  integrations: [
+    { id: 'int-modbus', name: 'Modbus TCP', category: 'protocol', description: 'Comunicação industrial padrão com PLCs e sensores.', icon: '🔌', enabled: true, status: 'connected' },
+    { id: 'int-mqtt', name: 'MQTT Broker', category: 'cloud', description: 'Conectividade IoT para integração com dashboards externos.', icon: '☁️', enabled: false, status: 'idle' },
+    { id: 'int-wifi', name: 'Wi-Fi Manager', category: 'connectivity', description: 'Gestão de redes sem fio e portal cativo.', icon: '📶', enabled: true, status: 'connected' },
+    { id: 'int-rs485', name: 'RS485/RTU', category: 'connectivity', description: 'Barramento serial para dispositivos de campo.', icon: '📟', enabled: false, status: 'idle' },
+    { id: 'int-hass', name: 'Home Assistant', category: 'platform', description: 'Integração nativa via MQTT Discovery.', icon: '🏠', enabled: false, status: 'idle' },
+    { id: 'int-influx', name: 'InfluxDB', category: 'cloud', description: 'Armazenamento de séries temporais para análise.', icon: '📊', enabled: false, status: 'idle' },
+    { id: 'int-i2c', name: 'I2C Bus', category: 'device', description: 'Suporte a expansores e sensores I2C.', icon: '🤖', enabled: true, status: 'connected' }
+  ]
 };
 
 export async function getMockProject(): Promise<EndapProject> {

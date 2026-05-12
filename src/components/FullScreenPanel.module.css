@@ -1,0 +1,53 @@
+// src/components/FullScreenPanel.module.css
+:root {
+  --color-bg: #020817;
+  --color-secondary-bg: #0B1220;
+  --color-primary: #0ED8F4;
+  --color-text: #F8FAFC;
+  --color-card-shadow: rgba(0, 0, 0, 0.4);
+  --spacing-md: 16px;
+  --border-radius: 12px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text);
+  font-family: var(--font-family, "Inter", sans-serif);
+  animation: fadeIn 0.3s ease-out;
+  z-index: 1000;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--spacing-md);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.closeBtn:hover {
+  transform: scale(1.1);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

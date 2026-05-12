@@ -3,6 +3,7 @@ import { EndapProject } from '../types/endap';
 const PROJECT_STORAGE_KEY = 'endap-studio:project';
 const SETTINGS_STORAGE_KEY = 'endap-studio:settings';
 const SNAPSHOTS_STORAGE_KEY = 'endap-studio:snapshots';
+const FORCE_STATE_STORAGE_KEY = 'endap-studio:forceState';
 const MAX_SNAPSHOTS = 12;
 
 export type StudioSettings = {
@@ -34,6 +35,21 @@ export function saveProjectToStorage(project: EndapProject): void {
       updatedAt: new Date().toISOString()
     })
   );
+}
+
+export function loadForceStateFromStorage(): Record<string, any> {
+  const rawForce = window.localStorage.getItem(FORCE_STATE_STORAGE_KEY);
+  if (!rawForce) return {};
+  try {
+    return JSON.parse(rawForce);
+  } catch {
+    window.localStorage.removeItem(FORCE_STATE_STORAGE_KEY);
+    return {};
+  }
+}
+
+export function saveForceStateToStorage(forceState: Record<string, any>): void {
+  window.localStorage.setItem(FORCE_STATE_STORAGE_KEY, JSON.stringify(forceState));
 }
 
 export function loadProjectFromStorage(): EndapProject | null {

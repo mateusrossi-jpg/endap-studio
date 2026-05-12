@@ -112,7 +112,8 @@ export type EndapLadderBlockKind =
   | 'counter'
   | 'coil'
   | 'coil-set'
-  | 'coil-reset';
+  | 'coil-reset'
+  | 'counter-reset';
 
 export type EndapLadderBlock = {
   id: string;
@@ -160,6 +161,19 @@ export type EndapBackup = {
   ladderProgram: EndapLadderProgram;
 };
 
+export type EndapIntegrationCategory = 'protocol' | 'connectivity' | 'platform' | 'cloud' | 'device';
+
+export type EndapIntegration = {
+  id: string;
+  name: string;
+  category: EndapIntegrationCategory;
+  description: string;
+  icon: string;
+  enabled: boolean;
+  status: 'connected' | 'disconnected' | 'error' | 'idle';
+  config?: Record<string, any>;
+};
+
 export type EndapProject = {
   id: string;
   name: string;
@@ -173,4 +187,5 @@ export type EndapProject = {
   diagnostics: EndapDiagnosticMetric[];
   automationRules: EndapAutomationRule[];
   ladderProgram: EndapLadderProgram;
+  integrations: EndapIntegration[]; // Added integrations field
 };

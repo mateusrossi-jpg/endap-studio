@@ -13,7 +13,7 @@ export function branchIsEnergized(branch: EndapLadderBranch) {
 }
 
 export function isOutputBlock(block: EndapLadderBlock) {
-  return ['coil', 'coil-set', 'coil-reset'].includes(block.kind);
+  return ['coil', 'coil-set', 'coil-reset', 'counter-reset'].includes(block.kind);
 }
 
 export function getAddress(block: EndapLadderBlock) {
@@ -31,7 +31,8 @@ export function createBlock(kind: EndapLadderBlockKind, index: number): EndapLad
     counter: 'C',
     coil: 'Q',
     'coil-set': 'M',
-    'coil-reset': 'M'
+    'coil-reset': 'M',
+    'counter-reset': 'C'
   };
 
   const label = `${prefixByKind[kind]}${index}`;
@@ -105,7 +106,13 @@ export function evaluatePath(
 
     if (block.kind === 'counter') {
       const inputWasPowered = power;
-      const accumulatedCount = inputWasPowered && !block.previousInput ? (block.accumulatedCount ?? 0) + 1 : block.accumulatedCount ?? 0;
+      const isReset = nextMemory[`${address}_RESET`] === true;
+      let accumulatedCount = block.accumulatedCount ?? 0;
+      if (isReset) {
+        accumulatedCount = 0;
+      } else if (inputWasPowered && !block.previousInput) {
+        accumulatedCount += 1;
+      }
       const presetCount = block.presetCount ?? 1;
       const active = accumulatedCount >= presetCount;
       power = power && active;
@@ -126,6 +133,13 @@ export function evaluatePath(
 
     if (block.kind === 'coil') {
       return { ...block, active: forcedValue ? forcedValue === 'on' : power };
+    }
+
+    if (block.kind === 'counter-reset') {
+      if (power) nextMemory[`${address}_RESET`] = true;
+      else nextMemory[`${address}_RESET`] = false;
+      const active = forcedValue ? forcedValue === 'on' : power;
+      return { ...block, active };
     }
 
     return block;
