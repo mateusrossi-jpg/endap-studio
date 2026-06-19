@@ -9,5 +9,8 @@ enum NodeType {
   counterCTU,
   counterCTD,
   coilSet,
-  coilReset
+  coilReset,
+  compareEqual,
+  compareGreater,
+  compareLess
 }

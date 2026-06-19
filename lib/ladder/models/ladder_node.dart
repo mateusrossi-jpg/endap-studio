@@ -39,7 +39,7 @@ class LadderNode {
           return '[ TON ${preset}ms ]';
         }
         return '[ TON ]';
-      case NodeType.counterCTU:
+            case NodeType.counterCTU:
         if (tag != null && tag.isNotEmpty) {
           if (preset != null) {
             return '[ CTU $tag $preset ]';
@@ -50,9 +50,28 @@ class LadderNode {
           return '[ CTU $preset ]';
         }
         return '[ CTU ]';
+      case NodeType.compareEqual:
+        return _formatCompareSymbol('EQU');
+      case NodeType.compareGreater:
+        return _formatCompareSymbol('GRT');
+      case NodeType.compareLess:
+        return _formatCompareSymbol('LES');
       default:
         return '[ ? ]';
     }
+  }
+
+  String _formatCompareSymbol(String op) {
+    final tag = config.tagId;
+    final preset = config.presetValue;
+    if (tag != null && tag.isNotEmpty) {
+      if (preset != null) {
+        final val = preset.boolValue ?? preset.intValue ?? preset.realValue ?? preset.stringValue ?? '';
+        return '[ $op $tag $val ]';
+      }
+      return '[ $op $tag ]';
+    }
+    return '[ $op ]';
   }
 
   LadderNode clone() {

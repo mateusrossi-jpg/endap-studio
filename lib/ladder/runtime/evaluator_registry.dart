@@ -4,6 +4,7 @@ import 'evaluators/contact_evaluator.dart';
 import 'evaluators/coil_evaluator.dart';
 import 'evaluators/timer_evaluator.dart';
 import 'evaluators/counter_evaluator.dart';
+import 'evaluators/compare_evaluator.dart';
 
 class EvaluatorRegistry {
   final Map<NodeType, NodeEvaluator> _registry = {};
@@ -29,6 +30,11 @@ class EvaluatorRegistry {
     final counterEval = CounterEvaluator();
     register(NodeType.counterCTU, counterEval);
     register(NodeType.counterCTD, counterEval);
+
+    final compareEval = CompareEvaluator();
+    register(NodeType.compareEqual, compareEval);
+    register(NodeType.compareGreater, compareEval);
+    register(NodeType.compareLess, compareEval);
   }
 
   void register(NodeType type, NodeEvaluator evaluator) {
