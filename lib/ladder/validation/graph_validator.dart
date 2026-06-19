@@ -37,7 +37,7 @@ class GraphValidator {
     }
 
     final hasInput = network.nodes.any((n) => n.type == NodeType.contactNO || n.type == NodeType.contactNC);
-    final hasOutput = network.nodes.any((n) => n.type == NodeType.coil || n.type == NodeType.timerTON || n.type == NodeType.counterCTU);
+    final hasOutput = network.nodes.any((n) => n.type == NodeType.coil || n.type == NodeType.timerTON || n.type == NodeType.counterCTU || n.type == NodeType.coilSet || n.type == NodeType.coilReset);
 
     if (!hasInput) {
       errors.add(GraphValidationError(

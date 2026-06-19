@@ -10,8 +10,14 @@ class CoilEvaluator implements NodeEvaluator {
     state.energized = inPowerFlow;
 
     final tagId = node.config.tagId;
-    if (tagId != null && node.type == NodeType.coil) {
-      tagStore.setBool(tagId, inPowerFlow);
+    if (tagId != null) {
+      if (node.type == NodeType.coil) {
+        tagStore.setBool(tagId, inPowerFlow);
+      } else if (node.type == NodeType.coilSet && inPowerFlow) {
+        tagStore.setBool(tagId, true);
+      } else if (node.type == NodeType.coilReset && inPowerFlow) {
+        tagStore.setBool(tagId, false);
+      }
     }
 
     return inPowerFlow; // A energia sempre atravessa a bobina para o barramento direito

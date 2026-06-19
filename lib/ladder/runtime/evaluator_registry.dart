@@ -19,6 +19,8 @@ class EvaluatorRegistry {
 
     final coilEval = CoilEvaluator();
     register(NodeType.coil, coilEval);
+    register(NodeType.coilSet, coilEval);
+    register(NodeType.coilReset, coilEval);
 
     final timerEval = TimerEvaluator();
     register(NodeType.timerTON, timerEval);

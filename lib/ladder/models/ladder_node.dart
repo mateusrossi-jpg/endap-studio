@@ -24,6 +24,10 @@ class LadderNode {
         return tag != null && tag.isNotEmpty ? '[ NC $tag ]' : '[ NC ]';
       case NodeType.coil:
         return tag != null && tag.isNotEmpty ? '( $tag )' : '( COIL )';
+      case NodeType.coilSet:
+        return tag != null && tag.isNotEmpty ? '( S $tag )' : '( SET )';
+      case NodeType.coilReset:
+        return tag != null && tag.isNotEmpty ? '( R $tag )' : '( RESET )';
       case NodeType.timerTON:
         if (tag != null && tag.isNotEmpty) {
           if (preset != null) {

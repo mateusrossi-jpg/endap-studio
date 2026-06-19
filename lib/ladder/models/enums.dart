@@ -7,5 +7,7 @@ enum NodeType {
   timerTON,
   timerTOF,
   counterCTU,
-  counterCTD
+  counterCTD,
+  coilSet,
+  coilReset
 }

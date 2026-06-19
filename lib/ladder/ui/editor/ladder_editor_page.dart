@@ -192,6 +192,8 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                 _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Aberto (NO)', NodeType.contactNO, Icons.power_input),
                 _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Fechado (NC)', NodeType.contactNC, Icons.do_not_disturb_on),
                 _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de Saída (COIL)', NodeType.coil, Icons.radio_button_checked),
+                _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de SET (Latch)', NodeType.coilSet, Icons.subdirectory_arrow_right),
+                _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de RESET (Unlatch)', NodeType.coilReset, Icons.settings_backup_restore),
                 _buildComponentMenuOption(rungIndex, insertIndex, 'Temporizador (TON)', NodeType.timerTON, Icons.timer),
                 _buildComponentMenuOption(rungIndex, insertIndex, 'Contador Crescente (CTU)', NodeType.counterCTU, Icons.plus_one),
               ],
@@ -1211,6 +1213,11 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
         break;
 
       case NodeType.coil:
+      case NodeType.coilSet:
+      case NodeType.coilReset:
+        final String label = node.type == NodeType.coil
+            ? 'OUT'
+            : (node.type == NodeType.coilSet ? 'S' : 'R');
         symbolWidget = SizedBox(
           width: 64,
           height: 54,
@@ -1229,10 +1236,10 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                     border: Border.all(color: color, width: 2),
                     color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.transparent,
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'OUT',
-                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white70),
+                      label,
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ),
@@ -1354,6 +1361,8 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                       _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
                       _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
                       _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
+                      _buildDraggableToolboxItem('Bobina SET', NodeType.coilSet, Icons.subdirectory_arrow_right),
+                      _buildDraggableToolboxItem('Bobina RST', NodeType.coilReset, Icons.settings_backup_restore),
                       _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
                       _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
                     ],
