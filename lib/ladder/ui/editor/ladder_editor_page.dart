@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../ladder_autosave.dart';
@@ -172,31 +173,36 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[700],
-                    borderRadius: BorderRadius.circular(2),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[700],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
-                const Text(
-                  'Adicionar Componente',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Aberto (NO)', NodeType.contactNO, Icons.power_input),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Fechado (NC)', NodeType.contactNC, Icons.do_not_disturb_on),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de Saída (COIL)', NodeType.coil, Icons.radio_button_checked),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de SET (Latch)', NodeType.coilSet, Icons.subdirectory_arrow_right),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de RESET (Unlatch)', NodeType.coilReset, Icons.settings_backup_restore),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Temporizador (TON)', NodeType.timerTON, Icons.timer),
-                _buildComponentMenuOption(rungIndex, insertIndex, 'Contador Crescente (CTU)', NodeType.counterCTU, Icons.plus_one),
-              ],
+                  const Text(
+                    'Adicionar Componente',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Aberto (NO)', NodeType.contactNO, Icons.power_input),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Contato Fechado (NC)', NodeType.contactNC, Icons.do_not_disturb_on),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de Saída (COIL)', NodeType.coil, Icons.radio_button_checked),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de SET (Latch)', NodeType.coilSet, Icons.subdirectory_arrow_right),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Bobina de RESET (Unlatch)', NodeType.coilReset, Icons.settings_backup_restore),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Temporizador (TON)', NodeType.timerTON, Icons.timer),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Contador Crescente (CTU)', NodeType.counterCTU, Icons.plus_one),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Igual (EQU)', NodeType.compareEqual, Icons.compare_arrows),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Maior (GRT)', NodeType.compareGreater, Icons.arrow_upward),
+                  _buildComponentMenuOption(rungIndex, insertIndex, 'Menor (LES)', NodeType.compareLess, Icons.arrow_downward),
+                ],
+              ),
             ),
           ),
         );
@@ -244,7 +250,43 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   void _showEditNodeBottomSheet(int rungIndex, int nodeIndex) {
     final node = _project.networks[rungIndex].nodes[nodeIndex];
     final tagController = TextEditingController(text: node.config.tagId ?? '');
-    final presetController = TextEditingController(text: node.config.presetValue?.intValue?.toString() ?? '');
+    
+    // Determine the preset value string representation
+    String initialPresetText = '';
+    final presetVal = node.config.presetValue;
+    if (presetVal != null) {
+      if (presetVal.stringValue != null) {
+        initialPresetText = presetVal.stringValue!;
+      } else if (presetVal.intValue != null) {
+        initialPresetText = presetVal.intValue.toString();
+      } else if (presetVal.realValue != null) {
+        initialPresetText = presetVal.realValue.toString();
+      } else if (presetVal.boolValue != null) {
+        initialPresetText = presetVal.boolValue.toString();
+      }
+    }
+    
+    final presetController = TextEditingController(text: initialPresetText);
+    
+    String operandBType = 'constant';
+    final tagBController = TextEditingController();
+    
+    if (node.type == NodeType.compareEqual ||
+        node.type == NodeType.compareGreater ||
+        node.type == NodeType.compareLess) {
+      if (presetVal != null) {
+        if (presetVal.stringValue != null && _project.tags.containsKey(presetVal.stringValue!)) {
+          operandBType = 'tag';
+          tagBController.text = presetVal.stringValue!;
+          presetController.text = '';
+        } else if (presetVal.stringValue != null) {
+          operandBType = 'constant';
+          presetController.text = presetVal.stringValue!;
+        } else {
+          operandBType = 'constant';
+        }
+      }
+    }
     
     showModalBottomSheet(
       context: context,
@@ -261,6 +303,10 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
           child: SafeArea(
             child: StatefulBuilder(
               builder: (context, setModalState) {
+                final isCompare = node.type == NodeType.compareEqual ||
+                    node.type == NodeType.compareGreater ||
+                    node.type == NodeType.compareLess;
+
                 return Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
@@ -280,7 +326,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                       const SizedBox(height: 16),
                       // Dropdown list or selection of existing tags
                       if (_project.tags.isNotEmpty) ...[
-                        Text('Selecionar Tag Existente:', style: TextStyle(color: Colors.grey[300], fontWeight: FontWeight.bold)),
+                        Text(isCompare ? 'Selecionar Tag do Operando A:' : 'Selecionar Tag Existente:', style: TextStyle(color: Colors.grey[300], fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -306,7 +352,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                         controller: tagController,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
-                          labelText: 'Nome da Tag (ex: START, MOTOR)',
+                          labelText: isCompare ? 'Operando A (Tag)' : 'Nome da Tag (ex: START, MOTOR)',
                           labelStyle: TextStyle(color: Colors.grey[400]),
                           enabledBorder: const UnderlineInputBorder(
                             borderSide: BorderSide(color: Colors.grey),
@@ -333,6 +379,100 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                             ),
                           ),
                         ),
+                      ],
+                      if (isCompare) ...[
+                        const SizedBox(height: 16),
+                        Text('Tipo do Operando B:', style: TextStyle(color: Colors.grey[300], fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            ChoiceChip(
+                              label: const Text('Constante'),
+                              selected: operandBType == 'constant',
+                              selectedColor: Colors.blueAccent,
+                              backgroundColor: const Color(0xFF334155),
+                              labelStyle: TextStyle(color: operandBType == 'constant' ? Colors.white : Colors.grey[300]),
+                              onSelected: (selected) {
+                                if (selected) {
+                                  setModalState(() {
+                                    operandBType = 'constant';
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: const Text('Outra Tag'),
+                              selected: operandBType == 'tag',
+                              selectedColor: Colors.blueAccent,
+                              backgroundColor: const Color(0xFF334155),
+                              labelStyle: TextStyle(color: operandBType == 'tag' ? Colors.white : Colors.grey[300]),
+                              onSelected: (selected) {
+                                if (selected) {
+                                  setModalState(() {
+                                    operandBType = 'tag';
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (operandBType == 'constant')
+                          TextField(
+                            controller: presetController,
+                            keyboardType: TextInputType.text,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Valor Constante (ex: 10, True, texto)',
+                              labelStyle: TextStyle(color: Colors.grey[400]),
+                              enabledBorder: const UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.grey),
+                              ),
+                              focusedBorder: const UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blueAccent),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          if (_project.tags.isNotEmpty) ...[
+                            Text('Selecionar Tag do Operando B:', style: TextStyle(color: Colors.grey[300], fontSize: 13)),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _project.tags.keys.map((tagId) {
+                                final isSelected = tagBController.text == tagId;
+                                return ChoiceChip(
+                                  label: Text(tagId, style: TextStyle(color: isSelected ? Colors.black : Colors.white)),
+                                  selected: isSelected,
+                                  selectedColor: Colors.greenAccent,
+                                  backgroundColor: const Color(0xFF334155),
+                                  onSelected: (selected) {
+                                    setModalState(() {
+                                      tagBController.text = selected ? tagId : '';
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          TextField(
+                            controller: tagBController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Nome da Tag do Operando B',
+                              labelStyle: TextStyle(color: Colors.grey[400]),
+                              enabledBorder: const UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.grey),
+                              ),
+                              focusedBorder: const UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blueAccent),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                       const SizedBox(height: 28),
                       ElevatedButton(
@@ -365,6 +505,36 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                               final val = int.tryParse(presetController.text);
                               if (val != null) {
                                 presetVal = TagValue.integer(val);
+                              }
+                            } else if (isCompare) {
+                              if (operandBType == 'constant') {
+                                final text = presetController.text.trim();
+                                final intVal = int.tryParse(text);
+                                final realVal = double.tryParse(text);
+                                if (intVal != null) {
+                                  presetVal = TagValue.integer(intVal);
+                                } else if (realVal != null) {
+                                  presetVal = TagValue.real(realVal);
+                                } else if (text.toLowerCase() == 'true' || text.toLowerCase() == 'false') {
+                                  presetVal = TagValue.boolean(text.toLowerCase() == 'true');
+                                } else {
+                                  presetVal = TagValue.string(text);
+                                }
+                              } else {
+                                final text = tagBController.text.trim().toUpperCase();
+                                presetVal = TagValue.string(text);
+                                // Ensure tag B is also in tags
+                                if (text.isNotEmpty && !_project.tags.containsKey(text)) {
+                                  _project.tags[text] = Tag(
+                                    id: text,
+                                    name: text,
+                                    type: TagType.bool,
+                                    initialValue: TagValue.boolean(false),
+                                  );
+                                  if (!_simulationInputs.containsKey(text)) {
+                                    _simulationInputs[text] = false;
+                                  }
+                                }
                               }
                             }
                             node.config = NodeConfig(
@@ -1116,10 +1286,16 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   }
 
   Widget _buildLadderNodeVisual(LadderNode node, bool isSelected) {
+    final int ms = DateTime.now().millisecondsSinceEpoch;
+    // Calculate pulse multiplier (goes from 0.0 to 1.0 back and forth over 1.5 seconds)
+    final double pulse = (math.sin(ms * 2 * math.pi / 1500) + 1.0) / 2.0;
+    final double glowRadius = node.isEnergized ? 4.0 + (pulse * 8.0) : 0.0;
+    final double glowOpacity = node.isEnergized ? 0.2 + (pulse * 0.4) : 0.0;
+
     final color = node.isEnergized ? Colors.greenAccent : Colors.grey[400]!;
     final bgColor = node.isEnergized
-        ? Colors.greenAccent.withValues(alpha: 0.1)
-        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.1) : const Color(0xFF1E293B));
+        ? Colors.greenAccent.withValues(alpha: 0.08)
+        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.08) : const Color(0xFF1E293B));
     final borderColor = isSelected
         ? Colors.yellowAccent
         : (node.isEnergized ? Colors.greenAccent : Colors.grey[700]!);
@@ -1284,6 +1460,12 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
             border: Border.all(color: borderColor, width: 2),
             borderRadius: BorderRadius.circular(6),
             boxShadow: [
+              if (node.isEnergized)
+                BoxShadow(
+                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
+                  blurRadius: glowRadius,
+                  spreadRadius: glowRadius / 2,
+                ),
               if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
             ],
           ),
@@ -1312,11 +1494,121 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
           ),
         );
         break;
+
+      case NodeType.compareEqual:
+      case NodeType.compareGreater:
+      case NodeType.compareLess:
+        final prefix = node.type == NodeType.compareEqual
+            ? 'EQU'
+            : (node.type == NodeType.compareGreater ? 'GRT' : 'LES');
+        final operator = node.type == NodeType.compareEqual
+            ? '='
+            : (node.type == NodeType.compareGreater ? '>' : '<');
+        final tagA = node.config.tagId ?? 'A';
+        final valB = node.config.presetValue;
+        String tagBText = '';
+        if (valB != null) {
+          if (valB.stringValue != null) {
+            tagBText = valB.stringValue!;
+          } else if (valB.intValue != null) {
+            tagBText = valB.intValue.toString();
+          } else if (valB.realValue != null) {
+            tagBText = valB.realValue.toString();
+          } else if (valB.boolValue != null) {
+            tagBText = valB.boolValue.toString();
+          }
+        } else {
+          tagBText = 'B';
+        }
+        
+        final storeValA = _runtime.tagStore.getValue(tagA);
+        final storeValB = valB != null && valB.stringValue != null ? _runtime.tagStore.getValue(valB.stringValue!) : null;
+        
+        String displayValA = '';
+        if (storeValA != null) {
+          displayValA = storeValA.boolValue?.toString() ?? storeValA.intValue?.toString() ?? storeValA.realValue?.toString() ?? storeValA.stringValue ?? '';
+        }
+        
+        String displayValB = '';
+        if (storeValB != null) {
+          displayValB = storeValB.boolValue?.toString() ?? storeValB.intValue?.toString() ?? storeValB.realValue?.toString() ?? storeValB.stringValue ?? '';
+        } else if (valB != null && valB.stringValue == null) {
+          displayValB = tagBText;
+        }
+
+        symbolWidget = Container(
+          width: 96,
+          height: 64,
+          decoration: BoxDecoration(
+            color: bgColor,
+            border: Border.all(color: borderColor, width: 2),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              if (node.isEnergized)
+                BoxShadow(
+                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
+                  blurRadius: glowRadius,
+                  spreadRadius: glowRadius / 2,
+                ),
+              if (isSelected)
+                BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                prefix,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  tagA,
+                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              if (displayValA.isNotEmpty)
+                Text(
+                  '($displayValA)',
+                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
+                ),
+              Text(
+                operator,
+                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  tagBText,
+                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              if (displayValB.isNotEmpty && displayValB != tagBText)
+                Text(
+                  '($displayValB)',
+                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+          ),
+        );
+        break;
       default:
         symbolWidget = Text(node.symbol);
     }
 
-    if (node.type == NodeType.timerTON || node.type == NodeType.counterCTU) {
+    if (node.type == NodeType.timerTON ||
+        node.type == NodeType.counterCTU ||
+        node.type == NodeType.compareEqual ||
+        node.type == NodeType.compareGreater ||
+        node.type == NodeType.compareLess) {
       return symbolWidget;
     }
 
@@ -1327,6 +1619,12 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
         border: Border.all(color: borderColor, width: 1.5),
         borderRadius: BorderRadius.circular(6),
         boxShadow: [
+          if (node.isEnergized)
+            BoxShadow(
+              color: Colors.greenAccent.withValues(alpha: glowOpacity),
+              blurRadius: glowRadius,
+              spreadRadius: glowRadius / 2,
+            ),
           if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.2), blurRadius: 4),
         ],
       ),
@@ -1336,8 +1634,13 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
 
   Widget _buildComponentToolbox() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      color: const Color(0xFF1E293B),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF334155), width: 1.5),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1365,6 +1668,9 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                       _buildDraggableToolboxItem('Bobina RST', NodeType.coilReset, Icons.settings_backup_restore),
                       _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
                       _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
+                      _buildDraggableToolboxItem('Igual (EQU)', NodeType.compareEqual, Icons.compare_arrows),
+                      _buildDraggableToolboxItem('Maior (GRT)', NodeType.compareGreater, Icons.arrow_upward),
+                      _buildDraggableToolboxItem('Menor (LES)', NodeType.compareLess, Icons.arrow_downward),
                     ],
                   ),
                 ),
@@ -1451,26 +1757,67 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
 
   Widget _buildToolboxCard(String label, IconData icon, NodeType type) {
     final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
-    return Card(
-      color: const Color(0xFF334155),
-      elevation: 2,
+    return Container(
       margin: const EdgeInsets.only(right: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: Colors.blueAccent),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                Text(tempNode.symbol, style: const TextStyle(color: Colors.greenAccent, fontSize: 9, fontFamily: 'monospace')),
-              ],
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF1E293B).withOpacity(0.8),
+            const Color(0xFF334155).withOpacity(0.5),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        border: Border.all(
+          color: const Color(0xFF475569).withOpacity(0.5),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: Colors.blueAccent),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                tempNode.symbol,
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 9,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
