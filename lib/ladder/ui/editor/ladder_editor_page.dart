@@ -13,6 +13,7 @@ import '../../simulation/ladder_simulation_controller.dart';
 import '../../ui/editor/utils.dart';
 import '../../validation/graph_validator.dart';
 import 'file_helper.dart';
+import '../../runtime/ladder_runtime.dart';
 
 class LadderEditorPage extends StatefulWidget {
   const LadderEditorPage({super.key});
@@ -30,6 +31,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   bool _initialized = false;
   bool _isDraggingNode = false;
   bool _isVariablesPanelExpanded = false;
+  final LadderRuntime _runtime = LadderRuntime();
 
   // Active inputs during simulation
   final Map<String, bool> _simulationInputs = {};
@@ -71,6 +73,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
             }
           }
           _runPassiveValidation();
+          _updateRuntimeProject();
           _startTimedSimulation();
         });
       }
@@ -78,6 +81,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       if (mounted) {
         setState(() {
           _initialized = true;
+          _updateRuntimeProject();
           _startTimedSimulation();
         });
       }
@@ -87,6 +91,15 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   Future<void> _saveProject() async {
     await saveCurrentLadder(_project);
     _runPassiveValidation();
+    _updateRuntimeProject();
+  }
+
+  void _updateRuntimeProject() {
+    final validator = GraphValidator();
+    final validationResult = validator.validate(_project);
+    if (validationResult.isValid && validationResult.executableGraph != null) {
+      _runtime.loadProject(validationResult.executableGraph!);
+    }
   }
 
   // PASSIVE TOPOLOGY VALIDATION (Runs automatically on background edits)
@@ -120,11 +133,32 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     });
   }
 
-  Future<void> _executeSimulationTick() async {
-    final result = await LadderSimulationController.runSimulation(_project, _simulationInputs);
-    if (!mounted) return;
-    applySimulationResult(_project, result);
-    setState(() {});
+  void _executeSimulationTick() {
+    _simulationInputs.forEach((tagId, val) {
+      _runtime.tagStore.setBool(tagId, val);
+    });
+
+    _runtime.singleScan(_scanPeriodMs);
+
+    for (final network in _project.networks) {
+      for (final node in network.nodes) {
+        final state = _runtime.nodeStates[node.id];
+        if (state != null) {
+          node.isEnergized = state.energized;
+        } else {
+          final tag = node.config.tagId;
+          if (tag != null && _runtime.tagStore.getValue(tag) != null) {
+            node.isEnergized = _runtime.tagStore.getBool(tag);
+          } else {
+            node.isEnergized = false;
+          }
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _showComponentBottomSheet(int rungIndex, [int? insertIndex]) {
@@ -1229,8 +1263,14 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       case NodeType.counterCTU:
         final prefix = node.type == NodeType.timerTON ? 'TON' : 'CTU';
         final preset = node.config.presetValue?.intValue?.toString() ?? '0';
+        final isTimer = node.type == NodeType.timerTON;
+        final runState = _runtime.nodeStates[node.id];
+        final accValue = isTimer 
+            ? (runState?.accumulatedTimeMs ?? 0) 
+            : (runState?.counterValue ?? 0);
+            
         symbolWidget = Container(
-          width: 84,
+          width: 96,
           height: 64,
           decoration: BoxDecoration(
             color: bgColor,
@@ -1254,8 +1294,12 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
               ),
               const SizedBox(height: 2),
               Text(
-                'PRE: ${preset}${node.type == NodeType.timerTON ? 'ms' : ''}',
-                style: const TextStyle(fontSize: 9, color: Colors.grey),
+                'ACC: $accValue${isTimer ? 'ms' : ''}',
+                style: const TextStyle(fontSize: 8, color: Colors.greenAccent, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'PRE: $preset${isTimer ? 'ms' : ''}',
+                style: const TextStyle(fontSize: 8, color: Colors.grey),
               ),
             ],
           ),
