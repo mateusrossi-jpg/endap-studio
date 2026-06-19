@@ -12,6 +12,7 @@ import '../../models/enums.dart';
 import '../../simulation/ladder_simulation_controller.dart';
 import '../../ui/editor/utils.dart';
 import '../../validation/graph_validator.dart';
+import 'file_helper.dart';
 
 class LadderEditorPage extends StatefulWidget {
   const LadderEditorPage({super.key});
@@ -27,6 +28,8 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   
   late LadderProject _project;
   bool _initialized = false;
+  bool _isDraggingNode = false;
+  bool _isVariablesPanelExpanded = false;
 
   // Active inputs during simulation
   final Map<String, bool> _simulationInputs = {};
@@ -465,14 +468,53 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
         backgroundColor: const Color(0xFF1E293B),
         title: const Text('Endap Studio Editor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         elevation: 4,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download, color: Colors.blueAccent),
+            tooltip: 'Importar JSON',
+            onPressed: () async {
+              final imported = await importProject();
+              if (imported != null) {
+                setState(() {
+                  _project = imported;
+                  _simulationInputs.clear();
+                  for (var tag in _project.tags.values) {
+                    if (tag.type == TagType.bool) {
+                      _simulationInputs[tag.id] = tag.initialValue?.boolValue ?? false;
+                    }
+                  }
+                  _saveProject();
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Projeto importado com sucesso!')),
+                  );
+                }
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload, color: Colors.greenAccent),
+            tooltip: 'Exportar JSON',
+            onPressed: () async {
+              await exportProject(_project);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Projeto exportado para download!')),
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
           _buildComponentToolbox(),
-          if (_project.tags.isNotEmpty) _buildSimulationControlBar(),
           Expanded(
             child: _project.networks.isEmpty ? _buildEmptyState() : _buildRungList(),
           ),
+          _buildVariablesPanel(),
         ],
       ),
       floatingActionButton: _project.networks.isNotEmpty
@@ -493,59 +535,207 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     );
   }
 
-  Widget _buildSimulationControlBar() {
-    final boolTags = _project.tags.values.where((t) => t.type == TagType.bool).toList();
-    if (boolTags.isEmpty) return const SizedBox.shrink();
+  Widget _buildVariablesPanel() {
+    final tags = _project.tags.values.toList();
+    final textController = TextEditingController();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: const Color(0xFF1E293B),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E293B),
+        border: Border(top: BorderSide(color: Color(0xFF334155), width: 1.5)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Painel de Simulação (Inputs):', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
-              TextButton.icon(
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                icon: const Icon(Icons.refresh, size: 16, color: Colors.blueAccent),
-                label: const Text('Limpar', style: TextStyle(fontSize: 12, color: Colors.blueAccent)),
-                onPressed: () {
-                  setState(() {
-                    _simulationInputs.updateAll((key, value) => false);
-                  });
-                },
-              )
-            ],
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: boolTags.map((tag) {
-                final active = _simulationInputs[tag.id] ?? false;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: FilterChip(
-                    selected: active,
-                    label: Text(tag.id, style: TextStyle(color: active ? Colors.black : Colors.white, fontSize: 13)),
-                    selectedColor: Colors.greenAccent,
-                    checkmarkColor: Colors.black,
-                    backgroundColor: const Color(0xFF334155),
-                    onSelected: (selected) {
-                      setState(() {
-                        _simulationInputs[tag.id] = selected;
-                      });
-                    },
+          // Header (Click to expand/collapse)
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isVariablesPanelExpanded = !_isVariablesPanelExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.tune, color: Colors.blueAccent, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Monitor de Variáveis & I/O',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                          '${tags.length}',
+                          style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
+                  Icon(
+                    _isVariablesPanelExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                    color: Colors.grey,
+                  ),
+                ],
+              ),
             ),
           ),
+          
+          // Expanded Content
+          if (_isVariablesPanelExpanded) ...[
+            const Divider(height: 1, color: Color(0xFF334155)),
+            
+            // Add Variable Input Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: TextField(
+                        controller: textController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Nova Tag (ex: BOTAO_LIGA, LED)',
+                          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onSubmitted: (val) {
+                          _addVariable(val);
+                          textController.clear();
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      _addVariable(textController.text);
+                      textController.clear();
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Variables List
+            Container(
+              constraints: const BoxConstraints(maxHeight: 180),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.only(bottom: 12),
+                itemCount: tags.length,
+                itemBuilder: (context, index) {
+                  final tag = tags[index];
+                  final isValueTrue = _simulationInputs[tag.id] ?? false;
+                  
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            // LED Indicator
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isValueTrue ? Colors.greenAccent : Colors.grey[700],
+                                boxShadow: isValueTrue
+                                    ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.6), blurRadius: 4)]
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              tag.id,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            // Switch to force value
+                            SizedBox(
+                              height: 24,
+                              child: Switch(
+                                value: isValueTrue,
+                                activeColor: Colors.greenAccent,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _simulationInputs[tag.id] = val;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Delete button
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                setState(() {
+                                  _project.tags.remove(tag.id);
+                                  _simulationInputs.remove(tag.id);
+                                  _saveProject();
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  void _addVariable(String tagId) {
+    final cleaned = tagId.trim().toUpperCase();
+    if (cleaned.isNotEmpty && !_project.tags.containsKey(cleaned)) {
+      setState(() {
+        _project.tags[cleaned] = Tag(
+          id: cleaned,
+          name: cleaned,
+          type: TagType.bool,
+          initialValue: TagValue.boolean(false),
+        );
+        _simulationInputs[cleaned] = false;
+        _saveProject();
+      });
+    }
   }
 
   Widget _buildEmptyState() {
@@ -690,20 +880,53 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                         return Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            InkWell(
-                              onTap: () {
+                            LongPressDraggable<Map<String, dynamic>>(
+                              data: {
+                                'type': 'move',
+                                'srcRung': index,
+                                'srcNode': i,
+                              },
+                              onDragStarted: () {
                                 setState(() {
-                                  _selectedRungIndex = index;
-                                  _selectedNodeIndex = i;
+                                  _isDraggingNode = true;
                                 });
-                                _showEditNodeBottomSheet(index, i);
                               },
-                              onLongPress: () {
-                                _showNodeOptionsBottomSheet(index, i);
+                              onDragEnd: (details) {
+                                setState(() {
+                                  _isDraggingNode = false;
+                                });
                               },
-                              child: _buildLadderNodeVisual(
-                                node,
-                                _selectedRungIndex == index && _selectedNodeIndex == i,
+                              onDraggableCanceled: (velocity, offset) {
+                                setState(() {
+                                  _isDraggingNode = false;
+                                });
+                              },
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: Opacity(
+                                  opacity: 0.7,
+                                  child: _buildLadderNodeVisual(node, false),
+                                ),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.3,
+                                child: _buildLadderNodeVisual(node, false),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedRungIndex = index;
+                                    _selectedNodeIndex = i;
+                                  });
+                                  _showEditNodeBottomSheet(index, i);
+                                },
+                                onLongPress: () {
+                                  _showNodeOptionsBottomSheet(index, i);
+                                },
+                                child: _buildLadderNodeVisual(
+                                  node,
+                                  _selectedRungIndex == index && _selectedNodeIndex == i,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -715,20 +938,36 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                             ),
                             const SizedBox(width: 8),
                             // Add button inside row with Drag and Drop support
-                            DragTarget<NodeType>(
+                            DragTarget<Object>(
                               onWillAcceptWithDetails: (details) => true,
                               onAcceptWithDetails: (details) {
-                                final type = details.data;
-                                final newNode = LadderNode(
-                                  id: 'node_${DateTime.now().microsecondsSinceEpoch}',
-                                  type: type,
-                                  config: NodeConfig(),
-                                );
-                                setState(() {
-                                  _project.networks[index].insertNode(newNode, i + 1);
-                                  _saveProject();
-                                });
-                                _showEditNodeBottomSheet(index, i + 1);
+                                final data = details.data;
+                                if (data is NodeType) {
+                                  final newNode = LadderNode(
+                                    id: 'node_${DateTime.now().microsecondsSinceEpoch}',
+                                    type: data,
+                                    config: NodeConfig(),
+                                  );
+                                  setState(() {
+                                    _project.networks[index].insertNode(newNode, i + 1);
+                                    _saveProject();
+                                  });
+                                  _showEditNodeBottomSheet(index, i + 1);
+                                } else if (data is Map<String, dynamic> && data['type'] == 'move') {
+                                  final srcRung = data['srcRung'] as int;
+                                  final srcNode = data['srcNode'] as int;
+                                  final nodeToMove = _project.networks[srcRung].nodes[srcNode];
+                                  
+                                  setState(() {
+                                    _project.networks[srcRung].removeNodeAt(srcNode);
+                                    int insertIdx = i + 1;
+                                    if (srcRung == index && srcNode < i + 1) {
+                                      insertIdx = i;
+                                    }
+                                    _project.networks[index].insertNode(nodeToMove, insertIdx);
+                                    _saveProject();
+                                  });
+                                }
                               },
                               builder: (context, candidateData, rejectedData) {
                                 final isHovered = candidateData.isNotEmpty;
@@ -768,20 +1007,32 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                         );
                       }),
                       // End insert button if empty or at the end with Drag and Drop support
-                      DragTarget<NodeType>(
+                      DragTarget<Object>(
                         onWillAcceptWithDetails: (details) => true,
                         onAcceptWithDetails: (details) {
-                          final type = details.data;
-                          final newNode = LadderNode(
-                            id: 'node_${DateTime.now().microsecondsSinceEpoch}',
-                            type: type,
-                            config: NodeConfig(),
-                          );
-                          setState(() {
-                            _project.networks[index].addNode(newNode);
-                            _saveProject();
-                          });
-                          _showEditNodeBottomSheet(index, _project.networks[index].nodes.length - 1);
+                          final data = details.data;
+                          if (data is NodeType) {
+                            final newNode = LadderNode(
+                              id: 'node_${DateTime.now().microsecondsSinceEpoch}',
+                              type: data,
+                              config: NodeConfig(),
+                            );
+                            setState(() {
+                              _project.networks[index].addNode(newNode);
+                              _saveProject();
+                            });
+                            _showEditNodeBottomSheet(index, _project.networks[index].nodes.length - 1);
+                          } else if (data is Map<String, dynamic> && data['type'] == 'move') {
+                            final srcRung = data['srcRung'] as int;
+                            final srcNode = data['srcNode'] as int;
+                            final nodeToMove = _project.networks[srcRung].nodes[srcNode];
+                            
+                            setState(() {
+                              _project.networks[srcRung].removeNodeAt(srcNode);
+                              _project.networks[index].addNode(nodeToMove);
+                              _saveProject();
+                            });
+                          }
                         },
                         builder: (context, candidateData, rejectedData) {
                           final isHovered = candidateData.isNotEmpty;
@@ -1039,25 +1290,78 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Paleta de Componentes (Arraste para o Rung):',
-            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
-                _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
-                _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
-                _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
-                _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
-              ],
+          Text(
+            _isDraggingNode 
+                ? 'Arraste aqui para Excluir o Elemento:' 
+                : 'Paleta de Componentes (Arraste para o Rung):',
+            style: TextStyle(
+              color: _isDraggingNode ? Colors.redAccent : Colors.grey, 
+              fontWeight: FontWeight.bold, 
+              fontSize: 13,
             ),
           ),
+          const SizedBox(height: 8),
+          _isDraggingNode
+              ? _buildTrashDropZone()
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
+                      _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
+                      _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
+                      _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
+                      _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
+                    ],
+                  ),
+                ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTrashDropZone() {
+    return DragTarget<Map<String, dynamic>>(
+      onWillAcceptWithDetails: (details) => details.data['type'] == 'move',
+      onAcceptWithDetails: (details) {
+        final srcRung = details.data['srcRung'] as int;
+        final srcNode = details.data['srcNode'] as int;
+        setState(() {
+          _project.networks[srcRung].removeNodeAt(srcNode);
+          _saveProject();
+          _isDraggingNode = false;
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return Container(
+          width: double.infinity,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isHovered ? Colors.redAccent.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.05),
+            border: Border.all(
+              color: isHovered ? Colors.redAccent : Colors.red.withValues(alpha: 0.5), 
+              width: isHovered ? 2.5 : 1.5,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.delete_sweep, color: isHovered ? Colors.redAccent : Colors.red[300]),
+              const SizedBox(width: 8),
+              Text(
+                isHovered ? 'Solte para Excluir!' : 'Solte o elemento aqui para remover',
+                style: TextStyle(
+                  color: isHovered ? Colors.redAccent : Colors.red[300], 
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
