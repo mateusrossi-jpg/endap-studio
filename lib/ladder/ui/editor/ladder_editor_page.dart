@@ -700,36 +700,9 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                               onLongPress: () {
                                 _showNodeOptionsBottomSheet(index, i);
                               },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                constraints: const BoxConstraints(minWidth: 72, minHeight: 48),
-                                decoration: BoxDecoration(
-                                  color: node.isEnergized
-                                      ? Colors.greenAccent.withValues(alpha: 0.15)
-                                      : ((_selectedRungIndex == index && _selectedNodeIndex == i)
-                                          ? Colors.yellowAccent.withValues(alpha: 0.15)
-                                          : const Color(0xFF334155)),
-                                  border: Border.all(
-                                    color: node.isEnergized
-                                        ? Colors.greenAccent
-                                        : ((_selectedRungIndex == index && _selectedNodeIndex == i)
-                                            ? Colors.yellowAccent
-                                            : Colors.grey[600]!),
-                                    width: 2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    node.symbol,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontFamily: 'monospace',
-                                      fontWeight: FontWeight.bold,
-                                      color: node.isEnergized ? Colors.greenAccent : Colors.white,
-                                    ),
-                                  ),
-                                ),
+                              child: _buildLadderNodeVisual(
+                                node,
+                                _selectedRungIndex == index && _selectedNodeIndex == i,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -797,4 +770,226 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       },
     );
   }
+
+  Widget _buildLadderNodeVisual(LadderNode node, bool isSelected) {
+    final color = node.isEnergized ? Colors.greenAccent : Colors.grey[400]!;
+    final bgColor = node.isEnergized
+        ? Colors.greenAccent.withValues(alpha: 0.1)
+        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.1) : const Color(0xFF1E293B));
+    final borderColor = isSelected
+        ? Colors.yellowAccent
+        : (node.isEnergized ? Colors.greenAccent : Colors.grey[700]!);
+
+    final tagText = node.config.tagId ?? '-';
+    final hasTag = node.config.tagId != null && node.config.tagId!.isNotEmpty;
+
+    // Renders matching symbols visually
+    Widget symbolWidget;
+    switch (node.type) {
+      case NodeType.contactNO:
+        symbolWidget = SizedBox(
+          width: 64,
+          height: 54,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Horizontal connection lines
+              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
+              // Left contact bar
+              Positioned(left: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
+              // Right contact bar
+              Positioned(right: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
+              // Clear center block so connection line doesn't pass through
+              Positioned(left: 24, right: 24, height: 32, child: Container(color: Colors.transparent)),
+              // Tag text top
+              Positioned(
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  child: Text(
+                    tagText,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        break;
+
+      case NodeType.contactNC:
+        symbolWidget = SizedBox(
+          width: 64,
+          height: 54,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Horizontal connection lines
+              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
+              // Left contact bar
+              Positioned(left: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
+              // Right contact bar
+              Positioned(right: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
+              // Diagonal slash (Normally Closed indicator)
+              Positioned(
+                left: 22,
+                right: 22,
+                top: 14,
+                bottom: 14,
+                child: CustomPaint(
+                  painter: _DiagonalLinePainter(color: color),
+                ),
+              ),
+              // Tag text top
+              Positioned(
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  child: Text(
+                    tagText,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        break;
+
+      case NodeType.coil:
+        symbolWidget = SizedBox(
+          width: 64,
+          height: 54,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Horizontal connection lines
+              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
+              // Coil symbol (circle with label)
+              Positioned(
+                width: 32,
+                height: 32,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color, width: 2),
+                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.transparent,
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'OUT',
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white70),
+                    ),
+                  ),
+                ),
+              ),
+              // Tag text top
+              Positioned(
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  child: Text(
+                    tagText,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        break;
+
+      case NodeType.timerTON:
+      case NodeType.counterCTU:
+        final prefix = node.type == NodeType.timerTON ? 'TON' : 'CTU';
+        final preset = node.config.presetValue?.intValue?.toString() ?? '0';
+        symbolWidget = Container(
+          width: 84,
+          height: 64,
+          decoration: BoxDecoration(
+            color: bgColor,
+            border: Border.all(color: borderColor, width: 2),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$prefix: $tagText',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'PRE: ${preset}${node.type == NodeType.timerTON ? 'ms' : ''}',
+                style: const TextStyle(fontSize: 9, color: Colors.grey),
+              ),
+            ],
+          ),
+        );
+        break;
+      default:
+        symbolWidget = Text(node.symbol);
+    }
+
+    if (node.type == NodeType.timerTON || node.type == NodeType.counterCTU) {
+      return symbolWidget;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border.all(color: borderColor, width: 1.5),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.2), blurRadius: 4),
+        ],
+      ),
+      child: symbolWidget,
+    );
+  }
+}
+
+class _DiagonalLinePainter extends CustomPainter {
+  final Color color;
+  _DiagonalLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    // Draw diagonal slash from bottom-left to top-right
+    canvas.drawLine(Offset(0, size.height), Offset(size.width, 0), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DiagonalLinePainter oldDelegate) => oldDelegate.color != color;
 }
