@@ -468,6 +468,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       ),
       body: Column(
         children: [
+          _buildComponentToolbox(),
           if (_project.tags.isNotEmpty) _buildSimulationControlBar(),
           Expanded(
             child: _project.networks.isEmpty ? _buildEmptyState() : _buildRungList(),
@@ -713,20 +714,48 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                               color: node.isEnergized ? Colors.greenAccent : Colors.grey[600],
                             ),
                             const SizedBox(width: 8),
-                            // Add button inside row
-                            InkWell(
-                              onTap: () => _showComponentBottomSheet(index, i + 1),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.greenAccent, width: 1.5),
-                                ),
-                                child: const Icon(Icons.add, color: Colors.greenAccent, size: 18),
-                              ),
+                            // Add button inside row with Drag and Drop support
+                            DragTarget<NodeType>(
+                              onWillAcceptWithDetails: (details) => true,
+                              onAcceptWithDetails: (details) {
+                                final type = details.data;
+                                final newNode = LadderNode(
+                                  id: 'node_${DateTime.now().microsecondsSinceEpoch}',
+                                  type: type,
+                                  config: NodeConfig(),
+                                );
+                                setState(() {
+                                  _project.networks[index].insertNode(newNode, i + 1);
+                                  _saveProject();
+                                });
+                                _showEditNodeBottomSheet(index, i + 1);
+                              },
+                              builder: (context, candidateData, rejectedData) {
+                                final isHovered = candidateData.isNotEmpty;
+                                return InkWell(
+                                  onTap: () => _showComponentBottomSheet(index, i + 1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: isHovered 
+                                          ? Colors.yellowAccent.withValues(alpha: 0.3)
+                                          : Colors.green.withValues(alpha: 0.2),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isHovered ? Colors.yellowAccent : Colors.greenAccent, 
+                                        width: isHovered ? 2.5 : 1.5,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      isHovered ? Icons.download : Icons.add, 
+                                      color: isHovered ? Colors.yellowAccent : Colors.greenAccent, 
+                                      size: 18,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(width: 8),
                             Container(
@@ -738,20 +767,48 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                           ],
                         );
                       }),
-                      // End insert button if empty or at the end
-                      InkWell(
-                        onTap: () => _showComponentBottomSheet(index),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.blueAccent, width: 1.5),
-                          ),
-                          child: const Icon(Icons.add, color: Colors.blueAccent, size: 22),
-                        ),
+                      // End insert button if empty or at the end with Drag and Drop support
+                      DragTarget<NodeType>(
+                        onWillAcceptWithDetails: (details) => true,
+                        onAcceptWithDetails: (details) {
+                          final type = details.data;
+                          final newNode = LadderNode(
+                            id: 'node_${DateTime.now().microsecondsSinceEpoch}',
+                            type: type,
+                            config: NodeConfig(),
+                          );
+                          setState(() {
+                            _project.networks[index].addNode(newNode);
+                            _saveProject();
+                          });
+                          _showEditNodeBottomSheet(index, _project.networks[index].nodes.length - 1);
+                        },
+                        builder: (context, candidateData, rejectedData) {
+                          final isHovered = candidateData.isNotEmpty;
+                          return InkWell(
+                            onTap: () => _showComponentBottomSheet(index),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isHovered
+                                    ? Colors.yellowAccent.withValues(alpha: 0.3)
+                                    : Colors.blue.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isHovered ? Colors.yellowAccent : Colors.blueAccent, 
+                                  width: isHovered ? 2.5 : 1.5,
+                                ),
+                              ),
+                              child: Icon(
+                                isHovered ? Icons.download : Icons.add, 
+                                color: isHovered ? Colors.yellowAccent : Colors.blueAccent, 
+                                size: 22,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(width: 12),
                       // Rail Right
@@ -972,6 +1029,92 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
         ],
       ),
       child: symbolWidget,
+    );
+  }
+
+  Widget _buildComponentToolbox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      color: const Color(0xFF1E293B),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Paleta de Componentes (Arraste para o Rung):',
+            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
+                _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
+                _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
+                _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
+                _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraggableToolboxItem(String label, NodeType type, IconData icon) {
+    final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
+    
+    return Draggable<NodeType>(
+      data: type,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Opacity(
+          opacity: 0.8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent.withValues(alpha: 0.3),
+              border: Border.all(color: Colors.blueAccent, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              tempNode.symbol,
+              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.4,
+        child: _buildToolboxCard(label, icon, type),
+      ),
+      child: _buildToolboxCard(label, icon, type),
+    );
+  }
+
+  Widget _buildToolboxCard(String label, IconData icon, NodeType type) {
+    final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
+    return Card(
+      color: const Color(0xFF334155),
+      elevation: 2,
+      margin: const EdgeInsets.only(right: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: Colors.blueAccent),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(tempNode.symbol, style: const TextStyle(color: Colors.greenAccent, fontSize: 9, fontFamily: 'monospace')),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
