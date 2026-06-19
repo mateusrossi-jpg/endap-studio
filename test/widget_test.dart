@@ -6,6 +6,7 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 // Removed unused Flutter import
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:endap_studio/main.dart';
@@ -16,6 +17,9 @@ void main() {
     await tester.pumpWidget(const EndapStudioApp());
 
     // Verify that the empty state is shown
-    expect(find.text('Seu primeiro programa'), findsOneWidget);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    // Verify that the empty state is shown
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

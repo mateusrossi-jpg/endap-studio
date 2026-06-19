@@ -1,5 +1,6 @@
 import '../models/ladder_project.dart';
 import '../models/ladder_network.dart';
+import '../models/enums.dart';
 import 'graph_validation_error.dart';
 import 'graph_validation_result.dart';
 import 'executable_graph.dart';
@@ -27,6 +28,30 @@ class GraphValidator {
   }
 
   void _validateNetwork(LadderNetwork network, List<GraphValidationError> errors) {
+    if (network.nodes.isEmpty) {
+      errors.add(GraphValidationError(
+        type: GraphErrorType.invalidConnection,
+        message: 'A rede está vazia.',
+      ));
+      return;
+    }
+
+    final hasInput = network.nodes.any((n) => n.type == NodeType.contactNO || n.type == NodeType.contactNC);
+    final hasOutput = network.nodes.any((n) => n.type == NodeType.coil || n.type == NodeType.timerTON || n.type == NodeType.counterCTU);
+
+    if (!hasInput) {
+      errors.add(GraphValidationError(
+        type: GraphErrorType.invalidConnection,
+        message: 'A rede precisa de ao menos uma entrada (Contato NA/NF).',
+      ));
+    }
+    if (!hasOutput) {
+      errors.add(GraphValidationError(
+        type: GraphErrorType.invalidConnection,
+        message: 'A rede precisa de ao menos uma saída (Bobina/Temporizador/Contador).',
+      ));
+    }
+
     final nodeIds = network.nodes.map((n) => n.id).toSet();
     
     // 1. Deteccao de conexoes invalidas ou nos faltantes
@@ -45,14 +70,14 @@ class GraphValidator {
       }
     }
     
-    // Se ha nos faltantes, abortar deteccao de ciclos pois o grafo ja esta quebrado
+    // Se ha nos faltantes ou erros estruturais iniciais, abortar deteccao de ciclos
     if (errors.isNotEmpty) return;
 
     // 2. Deteccao de Ciclos (Kahn's Algorithm para Topological Sort)
     final inDegree = <String, int>{};
     for (var n in network.nodes) {
-    inDegree[n.id] = 0;
-  }
+      inDegree[n.id] = 0;
+    }
     
     for (var c in network.connections) {
       if (inDegree.containsKey(c.toNodeId)) {

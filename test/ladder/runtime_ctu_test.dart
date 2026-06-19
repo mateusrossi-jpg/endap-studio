@@ -11,7 +11,7 @@ import 'package:endap_studio/ladder/models/ladder_project.dart';
 import 'package:endap_studio/ladder/runtime/ladder_runtime.dart';
 
 void main() {
-  LadderRuntime _setupRuntime({required int preset, required bool inputInitially}) {
+  LadderRuntime setupRuntime({required int preset, required bool inputInitially}) {
     final tagInput = Tag(id: 'T_IN', name: 'Input', type: TagType.bool, initialValue: TagValue.boolean(inputInitially));
     final tagOutput = Tag(id: 'T_OUT', name: 'Output', type: TagType.bool, initialValue: TagValue.boolean(false));
     final nodeNO = LadderNode(id: 'N1', type: NodeType.contactNO, config: NodeConfig(tagId: 'T_IN'));
@@ -27,14 +27,14 @@ void main() {
   }
 
   test('CTU does not trigger before preset', () {
-    final runtime = _setupRuntime(preset: 3, inputInitially: false);
+    final runtime = setupRuntime(preset: 3, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(10);
     expect(runtime.tagStore.getBool('T_OUT'), isFalse);
   });
 
   test('CTU counts only rising edge', () {
-    final runtime = _setupRuntime(preset: 3, inputInitially: false);
+    final runtime = setupRuntime(preset: 3, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(10);
     expect(runtime.tagStore.getBool('T_OUT'), isFalse);
@@ -48,7 +48,7 @@ void main() {
   });
 
   test('CTU accumulates multiple rising edges and triggers at preset', () {
-    final runtime = _setupRuntime(preset: 3, inputInitially: false);
+    final runtime = setupRuntime(preset: 3, inputInitially: false);
     for (int i = 0; i < 3; i++) {
       runtime.tagStore.setBool('T_IN', true);
       runtime.singleScan(10);
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('CTU output stays true after reaching preset', () {
-    final runtime = _setupRuntime(preset: 3, inputInitially: false);
+    final runtime = setupRuntime(preset: 3, inputInitially: false);
     for (int i = 0; i < 3; i++) {
       runtime.tagStore.setBool('T_IN', true);
       runtime.singleScan(10);
@@ -72,7 +72,7 @@ void main() {
   });
 
   test('CTU reset clears count and output', () {
-    final runtime = _setupRuntime(preset: 3, inputInitially: false);
+    final runtime = setupRuntime(preset: 3, inputInitially: false);
     for (int i = 0; i < 3; i++) {
       runtime.tagStore.setBool('T_IN', true);
       runtime.singleScan(10);

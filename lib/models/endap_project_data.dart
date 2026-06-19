@@ -1,6 +1,7 @@
 /// Data Transfer Objects (DTO) for persisting Endap projects.
 /// These objects are deliberately UI‑agnostic and contain only the
 /// information required to reconstruct a ladder after loading.
+library;
 
 class EndapProjectData {
   final int version;

@@ -12,7 +12,7 @@ import 'package:endap_studio/ladder/runtime/ladder_runtime.dart';
 
 void main() {
   // Helper to build a minimal project with a TON timer
-  LadderRuntime _setupRuntime({required int presetMs, required bool inputInitially}) {
+  LadderRuntime setupRuntime({required int presetMs, required bool inputInitially}) {
     final tagInput = Tag(id: 'T_IN', name: 'Input', type: TagType.bool, initialValue: TagValue.boolean(inputInitially));
     final tagOutput = Tag(id: 'T_OUT', name: 'Output', type: TagType.bool, initialValue: TagValue.boolean(false));
 
@@ -32,21 +32,21 @@ void main() {
   }
 
   test('TON does not trigger before preset', () {
-    final runtime = _setupRuntime(presetMs: 100, inputInitially: false);
+    final runtime = setupRuntime(presetMs: 100, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(50);
     expect(runtime.tagStore.getBool('T_OUT'), isFalse, reason: 'Should not be true before 100ms');
   });
 
   test('TON triggers exactly at preset', () {
-    final runtime = _setupRuntime(presetMs: 100, inputInitially: false);
+    final runtime = setupRuntime(presetMs: 100, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(100);
     expect(runtime.tagStore.getBool('T_OUT'), isTrue, reason: 'Should be true at 100ms');
   });
 
   test('TON remains energized after preset while input stays true', () {
-    final runtime = _setupRuntime(presetMs: 100, inputInitially: false);
+    final runtime = setupRuntime(presetMs: 100, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(120);
     expect(runtime.tagStore.getBool('T_OUT'), isTrue);
@@ -55,7 +55,7 @@ void main() {
   });
 
   test('TON resets when input becomes false', () {
-    final runtime = _setupRuntime(presetMs: 100, inputInitially: false);
+    final runtime = setupRuntime(presetMs: 100, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     runtime.singleScan(120);
     expect(runtime.tagStore.getBool('T_OUT'), isTrue);
@@ -65,7 +65,7 @@ void main() {
   });
 
   test('TON accumulates correctly over multiple small scans', () {
-    final runtime = _setupRuntime(presetMs: 100, inputInitially: false);
+    final runtime = setupRuntime(presetMs: 100, inputInitially: false);
     runtime.tagStore.setBool('T_IN', true);
     for (int i = 0; i < 5; i++) {
       runtime.singleScan(20);
