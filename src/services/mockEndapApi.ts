@@ -231,6 +231,12 @@ export const mockProject: EndapProject = {
   gateway,
   nodes,
   io: ioPoints,
+  tags: [
+    { id: 'tag-01', name: 'M0', type: 'memory', dataType: 'bool', value: false },
+    { id: 'tag-02', name: 'M1', type: 'memory', dataType: 'bool', value: false },
+    { id: 'tag-03', name: 'I0', type: 'input', dataType: 'bool', value: false },
+    { id: 'tag-04', name: 'Q0', type: 'output', dataType: 'bool', value: false }
+  ],
   failSafePolicies,
   alerts,
   diagnostics,

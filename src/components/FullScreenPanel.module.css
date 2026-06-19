@@ -1,9 +1,9 @@
-// src/components/FullScreenPanel.module.css
+/* src/components/FullScreenPanel.module.css */
 :root {
-  --color-bg: #020817;
-  --color-secondary-bg: #0B1220;
-  --color-primary: #0ED8F4;
-  --color-text: #F8FAFC;
+  --color-bg: var(--panel, #020817);
+  --color-secondary-bg: var(--bg-soft, #0B1220);
+  --color-primary: var(--cyan, #0ED8F4);
+  --color-text: var(--text, #F8FAFC);
   --color-card-shadow: rgba(0, 0, 0, 0.4);
   --spacing-md: 16px;
   --border-radius: 12px;
@@ -11,34 +11,55 @@
 
 .overlay {
   position: fixed;
-  inset: 0;
-  background: var(--color-bg);
-  backdrop-filter: blur(8px);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--panel-strong, #0d1a20);
+  border-left: 1px solid var(--line);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   color: var(--color-text);
   font-family: var(--font-family, "Inter", sans-serif);
-  animation: fadeIn 0.3s ease-out;
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .overlay {
+    width: 100%;
+    top: auto;
+    bottom: 0;
+    height: 80vh;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 .header {
   display: flex;
   justify-content: flex-end;
-  padding: var(--spacing-md);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0,0,0,0.1);
 }
 
 .closeBtn {
   background: transparent;
   border: none;
   color: var(--color-text);
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   cursor: pointer;
   transition: transform 0.2s;
+  padding: 4px;
 }
 
 .closeBtn:hover {
-  transform: scale(1.1);
+  color: var(--color-primary);
 }
 
 .content {
@@ -47,7 +68,12 @@
   padding: var(--spacing-md);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }

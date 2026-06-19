@@ -34,7 +34,7 @@ export function FieldPanels({
           <div className="io-list">
             {io.map((point) => (
               <article className={`io-row ${point.state ? 'is-active' : ''}`} key={point.id}>
-                <span className={`watch-dot ${point.state ? 'is-active' : ''}`} />
+                <span className={`led-indicator ${point.state ? 'is-running' : ''}`} style={{ animation: 'none' }} />
                 <div>
                   <strong>{point.address}</strong>
                   <p>{point.alias}</p>

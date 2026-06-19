@@ -1,35 +1,33 @@
 import { EndapLadderBlock } from '../../types/endap';
-import { blockClass, blockSymbol, counterProgress, timerProgress } from './utils';
+import { blockClass, counterProgress, timerProgress, renderSymbol } from './utils';
 
 export interface LadderBlockProps {
   block: EndapLadderBlock;
   isSelected: boolean;
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent) => void;
+  actions?: any;
 }
 
 export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
   return (
     <button
       className={blockClass(block, isSelected)}
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
       type="button"
     >
-      <span className="block-symbol">{blockSymbol(block)}</span>
-      <strong>{block.label}</strong>
+      <span className="block-symbol">{renderSymbol(block.kind)}</span>
+      <strong>{block.label || '?'}</strong>
       {block.kind.startsWith('timer') && (
         <span className="timer-readout">
-          ET {block.elapsedMs ?? 0} / PT {block.presetMs ?? 0} ms
-          <span className="timer-track">
-            <span className="timer-progress" style={{ width: `${timerProgress(block)}%` }} />
-          </span>
+          {block.elapsedMs ?? 0} / {block.presetMs ?? 0} ms
         </span>
       )}
       {block.kind === 'counter' && (
         <span className="timer-readout">
-          ACC {block.accumulatedCount ?? 0} / PV {block.presetCount ?? 1}
-          <span className="timer-track">
-            <span className="timer-progress" style={{ width: `${counterProgress(block)}%` }} />
-          </span>
+          {block.accumulatedCount ?? 0} / {block.presetCount ?? 1}
         </span>
       )}
     </button>

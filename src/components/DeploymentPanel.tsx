@@ -2,6 +2,8 @@ import { importBackup } from '../services/endapApi';
 import { StudioSettings } from '../services/storage';
 import { EndapProject } from '../types/endap';
 import { ProjectIssue } from './ProjectHealthPanel';
+import { compileToBytecode } from '../engine/compiler';
+import { useState } from 'react';
 
 type DeploymentPanelProps = {
   issues: ProjectIssue[];
@@ -17,6 +19,40 @@ export function DeploymentPanel({ issues, project, settings, onDeployResult }: D
     return total + rung.blocks.length + (rung.branches ?? []).reduce((branchTotal, branch) => branchTotal + branch.blocks.length, 0);
   }, 0);
 
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [bytecode, setBytecode] = useState('');
+
+  const generateBytecode = () => {
+    const compiled = compileToBytecode(project);
+    setBytecode(JSON.stringify(compiled, null, 2));
+  };
+
+  async function connectSerial() {
+    if (!('serial' in navigator)) {
+      onDeployResult(false, 'Seu navegador não suporta a Web Serial API (Recomendamos Chrome ou Edge).');
+      return;
+    }
+
+    try {
+      setIsConnecting(true);
+      // @ts-ignore
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      onDeployResult(true, 'Conectado à placa física (USB). Pronto para Flash.');
+      // Na vida real, enviamos o bytecode binário ou JSON pela porta
+      const textEncoder = new TextEncoderStream();
+      const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+      const writer = textEncoder.writable.getWriter();
+      await writer.write(JSON.stringify(compileToBytecode(project)));
+      await writer.close();
+      onDeployResult(true, 'Bytecode Flashed successfully!');
+    } catch (err) {
+      onDeployResult(false, 'Falha ao comunicar com a porta USB.');
+    } finally {
+      setIsConnecting(false);
+    }
+  }
+
   async function deployProject() {
     if (!canDeploy) {
       onDeployResult(false, 'Deploy bloqueado por falhas de validação local.');
@@ -28,7 +64,7 @@ export function DeploymentPanel({ issues, project, settings, onDeployResult }: D
         mode: settings.apiMode,
         gatewayBaseUrl: settings.gatewayBaseUrl
       });
-      onDeployResult(true, settings.apiMode === 'mock' ? 'Deploy mock validado localmente.' : 'Projeto enviado ao gateway.');
+      onDeployResult(true, settings.apiMode === 'mock' ? 'Deploy mock validado localmente.' : 'Projeto enviado ao gateway OTA.');
     } catch (error) {
       onDeployResult(false, error instanceof Error ? error.message : 'Falha ao enviar projeto ao gateway.');
     }
@@ -52,8 +88,8 @@ export function DeploymentPanel({ issues, project, settings, onDeployResult }: D
           <strong>{settings.apiMode}</strong>
         </article>
         <article>
-          <span>Rungs</span>
-          <strong>{project.ladderProgram.rungs.length}</strong>
+          <span>Instruções (Bytecode)</span>
+          <strong>{compileToBytecode(project).instructions.length}</strong>
         </article>
         <article>
           <span>Blocos</span>
@@ -65,8 +101,30 @@ export function DeploymentPanel({ issues, project, settings, onDeployResult }: D
         </article>
       </div>
 
-      <div className="contract-status">
-        <span>Destino</span>
+      <div style={{ marginTop: 24, padding: 16, border: '1px solid var(--line)', background: 'var(--panel-strong)', borderRadius: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, color: 'var(--text)' }}>Hardware Deploy (Web Serial API)</h3>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Conecte seu ESP32 via cabo USB e grave a lógica nativamente sem Arduino IDE.</p>
+          </div>
+          <button type="button" onClick={connectSerial} disabled={!canDeploy || isConnecting} style={{ background: 'var(--cyan)', color: '#000', padding: '8px 16px', fontWeight: 'bold' }}>
+            {isConnecting ? 'Conectando...' : 'FLASH VIA USB'}
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+           <button type="button" className="secondaryBtn" onClick={generateBytecode} style={{ fontSize: 12, border: '1px solid var(--line)' }}>Ver Código de Máquina (Bytecode)</button>
+        </div>
+
+        {bytecode && (
+          <pre style={{ marginTop: 12, background: '#0F172A', padding: 12, borderRadius: 4, maxHeight: 200, overflowY: 'auto', fontSize: 12, color: '#38bdf8' }}>
+            {bytecode}
+          </pre>
+        )}
+      </div>
+
+      <div className="contract-status" style={{ marginTop: 16 }}>
+        <span>Destino OTA</span>
         <strong>{settings.apiMode === 'mock' ? 'Runtime mock local' : `${settings.gatewayBaseUrl}/api/backup/import`}</strong>
       </div>
     </section>

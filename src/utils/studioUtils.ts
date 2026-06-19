@@ -133,12 +133,13 @@ export function validateProject(project: EndapProject, memoryMap: MemoryMap, for
   return issues;
 }
 
-export const navItems = ['Ladder', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico', 'Dashboard', 'Integrações', 'Deploy'] as const;
+export const navItems = ['Ladder', 'Tags', 'IO', 'Gateway', 'Nós', 'Fail-safe', 'Diagnóstico', 'Dashboard', 'Integrações', 'Deploy'] as const;
 export type NavItem = (typeof navItems)[number];
 
 export function sectionIdForNavItem(item: NavItem) {
   const sectionByItem: Record<NavItem, string> = {
     Ladder: 'ladder-section',
+    Tags: 'tags-section',
     IO: 'io-section',
     Gateway: 'gateway-section',
     Nós: 'nodes-section',

@@ -38,7 +38,7 @@ import {
   StudioProjectSnapshot,
   StudioSettings
 } from '../services/storage';
-import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapProject } from '../types/endap';
+import { EndapLadderBlock, EndapLadderBlockKind, EndapLadderBranch, EndapLadderRung, EndapProject } from '../types/endap';
 import { ProjectHistoryEntry, createHistoryEntry, createWatchItems, NavItem, publishBooleanDiff, resetRuntimeBlock, sectionIdForNavItem, validateProject } from '../utils/studioUtils';
 
 const AUTO_SCAN_INTERVAL_MS = 200;
@@ -57,7 +57,7 @@ export function useStudioController() {
   const [memoryMap, setMemoryMap] = useState<MemoryMap>({});
   const [forceState, setForceState] = useState<ForceState>(() => loadForceStateFromStorage());
   const [settings, setSettings] = useState<StudioSettings>(() => loadStudioSettings());
-  const [activeNavItem, setActiveNavItem] = useState<NavItem>('Ladder');
+  const [activeNavItem, setActiveNavItem] = useState<NavItem>('Dashboard');
   const [snapshots, setSnapshots] = useState<StudioProjectSnapshot[]>(() => loadProjectSnapshots());
   const [undoStack, setUndoStack] = useState<ProjectHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<ProjectHistoryEntry[]>([]);
@@ -72,19 +72,48 @@ export function useStudioController() {
 
     if (storedProject) {
       setProject(storedProject);
-      setSelectedRungId(storedProject.ladderProgram.rungs[0]?.id ?? null);
-      setSelectedBlockId(storedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setSelectedRungId(null);
+      setSelectedBlockId(null);
       setStorageStatus('Projeto restaurado do navegador');
       return;
     }
 
     getMockProject().then((loadedProject) => {
       setProject(loadedProject);
-      setSelectedRungId(loadedProject.ladderProgram.rungs[0]?.id ?? null);
-      setSelectedBlockId(loadedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setSelectedRungId(null);
+      setSelectedBlockId(null);
       setStorageStatus('Projeto mock carregado');
     });
   }, []);
+
+  useEffect(() => {
+    if (!project) return;
+    
+    // Sincroniza o mapa de memória inicial com o estado do projeto
+    setMemoryMap(current => {
+      const initialMemory: MemoryMap = { ...current };
+      
+      // Carrega estados dos I/Os
+      project.io.forEach(io => {
+        if (initialMemory[io.address] === undefined) {
+          initialMemory[io.address] = io.state;
+        }
+      });
+      
+      // Carrega estados iniciais dos blocos (timers, contadores, memórias)
+      project.ladderProgram.rungs.forEach(rung => {
+        getAllRungBlocks(rung).forEach(block => {
+          const addr = block.address || block.label;
+          if (addr && (initialMemory[addr] === undefined)) {
+            initialMemory[addr] = block.active;
+          }
+        });
+      });
+      
+      memoryMapRef.current = initialMemory;
+      return initialMemory;
+    });
+  }, [project?.id]); // Só executa quando o projeto muda (load/reset)
 
   useEffect(() => {
     if (!project) return;
@@ -201,8 +230,8 @@ export function useStudioController() {
 
     setRuntimeMode('STOP');
     setProject({ ...entry.project, updatedAt: new Date().toISOString() });
-    setSelectedRungId(entry.project.ladderProgram.rungs[0]?.id ?? null);
-    setSelectedBlockId(entry.project.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+    setSelectedRungId(null);
+    setSelectedBlockId(null);
     setStorageStatus(direction === 'undo' ? `Undo: ${entry.label}` : `Redo: ${entry.label}`);
     createRuntimeInfoEvent('project.changed', 'history', direction === 'undo' ? `Undo aplicado: ${entry.label}` : `Redo aplicado: ${entry.label}`);
   }
@@ -290,8 +319,9 @@ export function useStudioController() {
 
       const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + getAllRungBlocks(rung).length, 0) + 1;
       const newBlock = createBlock(kind, nextIndex);
-      setSelectedBlockId(newBlock.id);
-      setSelectedRungId(targetRungId);
+      // Removida auto-seleção para não abrir propriedades automaticamente
+      // setSelectedBlockId(newBlock.id);
+      // setSelectedRungId(targetRungId);
 
       return {
         ...currentProject,
@@ -306,23 +336,144 @@ export function useStudioController() {
     });
   }
 
-  function addBranch() {
+  function insertBlock(kind: EndapLadderBlockKind, targetRungId: string, targetBlockId?: string) {
+    recordUndo(`Inserir ${kind}`);
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      
+      const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + getAllRungBlocks(rung).length, 0) + 1;
+      const newBlock = createBlock(kind, nextIndex);
+      // Removida auto-seleção
+      // setSelectedBlockId(newBlock.id);
+      // setSelectedRungId(targetRungId);
+
+      const isOutputBlockToAdd = kind.includes('coil') || kind.includes('reset');
+
+      let targetCol: number | undefined;
+      let targetBranchIndex: number | undefined;
+      let isMainPath = false;
+      
+      if (!isOutputBlockToAdd && targetBlockId && targetBlockId.startsWith('cell-')) {
+         const cellId = targetBlockId.replace(`cell-${targetRungId}-`, ''); 
+         if (cellId.startsWith('main-wire-')) {
+           targetCol = parseInt(cellId.replace('main-wire-', ''), 10);
+           isMainPath = true;
+         } else if (cellId.startsWith('branch-')) {
+           const match = cellId.match(/branch-(\d+)-wire-(\d+)/);
+           if (match) {
+             targetBranchIndex = parseInt(match[1], 10) - 1; 
+             targetCol = parseInt(match[2], 10);
+           }
+         }
+      }
+
+      if (targetCol !== undefined && !Number.isNaN(targetCol)) {
+         newBlock.col = targetCol;
+      }
+
+      const sortBlocks = (blocks: EndapLadderBlock[]) => {
+        return [...blocks].sort((a, b) => {
+          const aOut = a.kind.includes('coil') || a.kind.includes('reset');
+          const bOut = b.kind.includes('coil') || b.kind.includes('reset');
+          if (aOut && !bOut) return 1;
+          if (!aOut && bOut) return -1;
+          return (a.col ?? 99) - (b.col ?? 99);
+        });
+      };
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs: currentProject.ladderProgram.rungs.map((rung) => {
+            if (rung.id !== targetRungId) return rung;
+            
+            if (isOutputBlockToAdd) {
+              return { ...rung, blocks: sortBlocks([...rung.blocks, newBlock]) };
+            }
+
+            if (targetCol !== undefined && !Number.isNaN(targetCol)) {
+              if (isMainPath) {
+                return { ...rung, blocks: sortBlocks([...rung.blocks, newBlock]) };
+              } else if (targetBranchIndex !== undefined && rung.branches) {
+                const newBranches = [...rung.branches];
+                if (targetBranchIndex >= 0 && targetBranchIndex < newBranches.length) {
+                  newBranches[targetBranchIndex] = {
+                    ...newBranches[targetBranchIndex],
+                    blocks: sortBlocks([...newBranches[targetBranchIndex].blocks, newBlock])
+                  };
+                }
+                return { ...rung, branches: newBranches };
+              }
+            }
+
+            if (!targetBlockId || targetBlockId.startsWith('cell-')) {
+              return { ...rung, blocks: sortBlocks([...rung.blocks, newBlock]) };
+            }
+
+            const blockIndex = rung.blocks.findIndex(b => b.id === targetBlockId);
+            if (blockIndex !== -1) {
+              const newBlocks = [...rung.blocks];
+              newBlock.col = (newBlocks[blockIndex].col ?? blockIndex) + 1;
+              newBlocks.splice(blockIndex + 1, 0, newBlock); 
+              return { ...rung, blocks: sortBlocks(newBlocks) };
+            }
+
+            if (rung.branches) {
+              const newBranches = rung.branches.map(branch => {
+                const bIdx = branch.blocks.findIndex(b => b.id === targetBlockId);
+                if (bIdx !== -1) {
+                  const newBranchBlocks = [...branch.blocks];
+                  newBlock.col = (newBranchBlocks[bIdx].col ?? bIdx) + 1;
+                  newBranchBlocks.splice(bIdx + 1, 0, newBlock);
+                  return { ...branch, blocks: sortBlocks(newBranchBlocks) };
+                }
+                return branch;
+              });
+              if (newBranches !== rung.branches) { 
+                 return { ...rung, branches: newBranches };
+              }
+            }
+
+            return { ...rung, blocks: sortBlocks([...rung.blocks, newBlock]) };
+          })
+        }
+      };
+    });
+  }
+
+  function addBranch(explicitRungId?: string, anchorBlockId?: string, kind: EndapLadderBlockKind = 'contact-no') {
     recordUndo('Adicionar branch OR');
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
-      const targetRungId = selectedRungId ?? currentProject.ladderProgram.rungs[0]?.id;
+      const targetRungId = explicitRungId || selectedRungId || currentProject.ladderProgram.rungs[0]?.id;
       if (!targetRungId) return currentProject;
 
+      const rung = currentProject.ladderProgram.rungs.find(r => r.id === targetRungId);
+      if (!rung) return currentProject;
+
+      let finalAnchorId = anchorBlockId;
+
+      // Se não veio por drag and drop (veio por clique de botão na Toolbox)
+      if (!finalAnchorId && selectedBlockId && !selectedBlockId.startsWith('cell-')) {
+         // Só pode ancorar num bloco existente
+         finalAnchorId = selectedBlockId;
+      }
+
       const nextIndex = currentProject.ladderProgram.rungs.reduce((total, rung) => total + getAllRungBlocks(rung).length, 0) + 1;
-      const branchBlock = createBlock('memory-contact-no', nextIndex);
+      const branchBlock = createBlock(kind, nextIndex); 
+
       const branch: EndapLadderBranch = {
         id: `branch-${Date.now()}`,
         title: 'OR branch',
+        anchorBlockId: finalAnchorId, // Pode ser indefinido (legacy global OR)
         blocks: [branchBlock]
       };
 
-      setSelectedBlockId(branchBlock.id);
-      setSelectedRungId(targetRungId);
+      // Removida auto-seleção
+      // setSelectedBlockId(branchBlock.id);
+      // setSelectedRungId(targetRungId);
       createRuntimeInfoEvent('ladder.branch_changed', targetRungId, 'Branch OR adicionada');
 
       return {
@@ -330,8 +481,8 @@ export function useStudioController() {
         updatedAt: new Date().toISOString(),
         ladderProgram: {
           ...currentProject.ladderProgram,
-          rungs: currentProject.ladderProgram.rungs.map((rung) =>
-            rung.id === targetRungId ? { ...rung, branches: [...(rung.branches ?? []), branch] } : rung
+          rungs: currentProject.ladderProgram.rungs.map((r) =>
+            r.id === targetRungId ? { ...r, branches: [...(r.branches ?? []), branch] } : r
           )
         }
       };
@@ -425,6 +576,52 @@ export function useStudioController() {
       };
     });
     createRuntimeWarningEvent('project.changed', selectedRungId, 'Rung removida do projeto');
+  }
+
+  function duplicateSelectedRung() {
+    if (!selectedRungId) return;
+    recordUndo('Duplicar rung');
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      const rungs = [...currentProject.ladderProgram.rungs];
+      const index = rungs.findIndex(r => r.id === selectedRungId);
+      if (index === -1) return currentProject;
+
+      const original = rungs[index];
+      const cloneBlock = (b: EndapLadderBlock): EndapLadderBlock => ({
+        ...b,
+        id: `block-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        active: false,
+        elapsedMs: b.kind.startsWith('timer') ? 0 : b.elapsedMs,
+        accumulatedCount: b.kind === 'counter' ? 0 : b.accumulatedCount,
+        previousInput: b.kind === 'counter' ? false : b.previousInput
+      });
+
+      const duplicatedRung: EndapLadderRung = {
+        ...original,
+        id: `rung-${Date.now()}`,
+        title: `${original.title} (Cópia)`,
+        blocks: original.blocks.map(cloneBlock),
+        branches: original.branches?.map(br => ({
+          ...br,
+          id: `branch-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          blocks: br.blocks.map(cloneBlock)
+        }))
+      };
+
+      rungs.splice(index + 1, 0, duplicatedRung);
+      setSelectedRungId(duplicatedRung.id);
+      setSelectedBlockId(duplicatedRung.blocks[0]?.id || duplicatedRung.branches?.[0]?.blocks[0]?.id || null);
+
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        ladderProgram: {
+          ...currentProject.ladderProgram,
+          rungs
+        }
+      };
+    });
   }
 
   function duplicateSelectedBlock() {
@@ -565,23 +762,52 @@ export function useStudioController() {
     const scanStartedAt = performance.now();
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
+      
       const previousMemory = memoryMapRef.current;
       const previousCoils = collectCoilStates(currentProject);
       const previousTimers = collectTimerDoneStates(currentProject);
       const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
-      let nextMemory = previousMemory;
+      
+      let nextMemory = { ...previousMemory };
+
+      // Phase 1: Read Inputs (and Manual Overrides) from Project I/O
+      currentProject.io.forEach(io => {
+        // Se for entrada ou se estiver em modo manual, o estado do I/O manda na memória
+        if (io.direction === 'input' || io.manualMode) {
+          nextMemory[io.address] = io.state;
+        }
+      });
+
+      // Phase 2: Execute Ladder logic
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
         const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
         nextMemory = result.memory;
         return result.rung;
       });
 
+      // Phase 3: Write Outputs back to Project I/O (if not in manual mode)
+      const nextIo = currentProject.io.map(io => {
+        let nextState = io.state;
+        if (io.direction === 'output' && !io.manualMode) {
+          nextState = nextMemory[io.address] as boolean ?? io.state;
+        }
+        
+        // Auto-reset pulse inputs after one scan
+        if (io.direction === 'input' && io.interactionMode === 'pulse' && io.state === true) {
+          nextState = false;
+        }
+        
+        return { ...io, state: nextState };
+      });
+
       setMemoryMap(nextMemory);
+      memoryMapRef.current = nextMemory;
 
       const nextProject = {
         ...currentProject,
         updatedAt: new Date().toISOString(),
+        io: nextIo,
         ladderProgram: {
           ...currentProject.ladderProgram,
           scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
@@ -606,6 +832,7 @@ export function useStudioController() {
       return nextProject;
     });
     const nextScanCount = scanCountRef.current + 1;
+    scanCountRef.current = nextScanCount;
     if (mode === 'manual') {
       createRuntimeInfoEvent('runtime.scan', 'studio-runtime', 'STEP executado', { scanCount: nextScanCount, deltaMs });
     } else if (nextScanCount % 25 === 0) {
@@ -625,8 +852,8 @@ export function useStudioController() {
     getMockProject().then((loadedProject) => {
       const refreshedProject = { ...loadedProject, updatedAt: new Date().toISOString() };
       setProject(refreshedProject);
-      setSelectedRungId(refreshedProject.ladderProgram.rungs[0]?.id ?? null);
-      setSelectedBlockId(refreshedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setSelectedRungId(null);
+      setSelectedBlockId(null);
       setStorageStatus('Projeto reiniciado');
       createRuntimeWarningEvent('project.changed', 'studio-project', 'Projeto resetado para mock local');
     });
@@ -678,8 +905,8 @@ export function useStudioController() {
       setMemoryMap({});
       setForceState({});
       setProject({ ...importedProject, updatedAt: new Date().toISOString() });
-      setSelectedRungId(importedProject.ladderProgram.rungs[0]?.id ?? null);
-      setSelectedBlockId(importedProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+      setSelectedRungId(null);
+      setSelectedBlockId(null);
       setStorageStatus('Projeto importado');
       createRuntimeInfoEvent('project.changed', 'studio-project', `Projeto importado: ${importedProject.name}`);
     } catch (error) {
@@ -712,8 +939,8 @@ export function useStudioController() {
     setMemoryMap({});
     setForceState({});
     setProject(restoredProject);
-    setSelectedRungId(restoredProject.ladderProgram.rungs[0]?.id ?? null);
-    setSelectedBlockId(restoredProject.ladderProgram.rungs[0]?.blocks[0]?.id ?? null);
+    setSelectedRungId(null);
+    setSelectedBlockId(null);
     setStorageStatus('Snapshot restaurado');
     createRuntimeWarningEvent('project.changed', 'studio-snapshot', `Snapshot restaurado: ${snapshot.name}`);
   }
@@ -736,15 +963,37 @@ export function useStudioController() {
     setMemoryMap((current) => {
       const nextValue = !(current[address] ?? false);
       createMemoryChangedEvent(address, nextValue);
-      return { ...current, [address]: nextValue };
+      const nextMap = { ...current, [address]: nextValue };
+      memoryMapRef.current = nextMap; // Sync update for the simulation loop
+      return nextMap;
     });
   }
 
+  function toggleBlock(block: EndapLadderBlock) {
+    const address = block.address || block.label;
+    if (!address) return;
+
+    // Timers e contadores são automáticos
+    if (block.kind.startsWith('timer') || block.kind === 'counter') return;
+
+    // Procura se é um I/O real para alternar o estado do I/O (que o scan lê)
+    const ioPoint = project?.io.find((io) => io.address === address);
+    if (ioPoint) {
+      toggleIoPoint(ioPoint.id, 'state');
+    } else {
+      toggleMemory(address);
+    }
+  }
+
   function setForce(address: string, target: ForceTarget) {
-    setForceState((current) => ({
-      ...current,
-      [address]: { target, source: 'manual', updatedAt: new Date().toISOString() }
-    }));
+    setForceState((current) => {
+      const next = {
+        ...current,
+        [address]: { target, source: 'manual', updatedAt: new Date().toISOString() as string } as any
+      };
+      forceStateRef.current = next;
+      return next;
+    });
     createRuntimeWarningEvent('memory.changed', address, `${address} em FORCE ${target.toUpperCase()}`, { address, force: target });
   }
 
@@ -752,6 +1001,7 @@ export function useStudioController() {
     setForceState((current) => {
       const next = { ...current };
       delete next[address];
+      forceStateRef.current = next;
       return next;
     });
     createRuntimeInfoEvent('memory.changed', address, `${address} liberado do FORCE`, { address });
@@ -801,6 +1051,17 @@ export function useStudioController() {
         });
       }
       return nextProject;
+    });
+  }
+
+  function updateIoPoint(id: string, patch: any) {
+    setProject((currentProject) => {
+      if (!currentProject) return currentProject;
+      return {
+        ...currentProject,
+        updatedAt: new Date().toISOString(),
+        io: currentProject.io.map((point) => (point.id === id ? { ...point, ...patch } : point))
+      };
     });
   }
 
@@ -871,10 +1132,12 @@ export function useStudioController() {
       redoProjectChange,
       updateSelectedBlock,
       addBlock,
+      insertBlock,
       addBranch,
       updateSelectedRung,
       addRung,
       moveSelectedRung,
+      duplicateSelectedRung,
       deleteSelectedRung,
       duplicateSelectedBlock,
       moveSelectedBlock,
@@ -891,12 +1154,14 @@ export function useStudioController() {
       toggleRuntimeMode,
       updateSettings,
       toggleMemory,
+      toggleBlock,
       setForce,
       releaseForce,
       handleGatewayResult,
       handleDeployResult,
       navigateTo,
       toggleIoPoint,
+      updateIoPoint,
       toggleIntegration,
       configureIntegration,
       handlePresetChange,

@@ -18,6 +18,7 @@ export interface PropertyPanelProps {
     recordUndo: (label: string) => void;
     updateSelectedRung: (patch: Partial<EndapLadderRung>) => void;
     moveSelectedRung: (dir: -1 | 1) => void;
+    duplicateSelectedRung: () => void;
     deleteSelectedRung: () => void;
     updateSelectedBlock: (patch: Partial<EndapLadderBlock>) => void;
     handlePresetChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -27,89 +28,86 @@ export interface PropertyPanelProps {
     moveSelectedBlock: (dir: -1 | 1) => void;
     deleteSelectedBlock: () => void;
     saveProjectToStorage: (p: EndapProject) => void;
+    toggleIoPoint: (id: string, field: 'state' | 'manualMode' | 'testMode') => void;
+    updateIoPoint: (id: string, patch: any) => void;
     toggleMemory: (addr: string) => void;
+    toggleBlock: (block: EndapLadderBlock) => void;
     setForce: (addr: string, t: ForceTarget) => void;
     releaseForce: (addr: string) => void;
-    addBlock?: (kind: EndapLadderBlockKind) => void; // optional for RungViewer
-    addBranch?: () => void; // optional for RungViewer
+    addBlock?: (kind: EndapLadderBlockKind) => void;
+    addBranch?: () => void;
   };
+  onClose?: () => void;
 }
 
-export function PropertyPanel({ project, selectedBlock, selectedRung, memoryMap, watchItems, actions }: PropertyPanelProps) {
+export function PropertyPanel({ project, selectedBlock, selectedRung, memoryMap, watchItems, actions, onClose }: PropertyPanelProps) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  
   const isTimer = selectedBlock?.kind.startsWith('timer');
   const isCounter = selectedBlock?.kind === 'counter';
+  const isComparison = selectedBlock?.kind.startsWith('compare');
   const isContact = selectedBlock?.kind.includes('contact');
   const isCoil = selectedBlock?.kind.includes('coil') && selectedBlock?.kind !== 'counter-reset';
 
-  const [showRungViewer, setShowRungViewer] = useState(false);
-
-  const closePanel = () => {
-    // Caso seja necessário fechar o panel a partir de fora, implementar lógica aqui.
-  };
+  const ioPoint = project.io.find(p => p.address === selectedBlock?.address);
+  const isInput = ioPoint?.direction === 'input';
 
   return (
-    <FullScreenPanel onClose={closePanel}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>{selectedBlock ? selectedBlock.label : 'Nenhum bloco'}</h2>
-        <button className={styles.primaryBtn} onClick={() => setShowRungViewer(true)}>
-          Visualizar Rungs
-        </button>
+    <div className={styles.panel}>
+      {/* Cabeçalho de Contexto */}
+      <div className={styles.contextHeader}>
+        <div className={styles.typeIcon}>
+          {selectedBlock ? '🧩' : '🪜'}
+        </div>
+        <div>
+          <h2 className={styles.mainTitle}>
+            {selectedBlock ? blockKindLabel(selectedBlock) : `Rung ${project.ladderProgram.rungs.indexOf(selectedRung!) + 1}`}
+          </h2>
+          <span className={styles.subTitle}>
+            {selectedBlock ? (selectedBlock.address || 'Sem endereço') : (selectedRung?.title || 'Lógica sem título')}
+          </span>
+        </div>
       </div>
 
-      {showRungViewer && (
-        <RungViewer
-          rungs={project.ladderProgram.rungs}
-          onAddParallel={(rungId) => actions.addBranch && actions.addBranch()}
-          onAddComponent={(rungId) => actions.addBlock && actions.addBlock('contact-no')}
-          onClose={() => setShowRungViewer(false)}
-        />
-      )}
-
-      {/* Área de propriedades */}
-      <div className={styles.cardSection}>
-        {selectedRung && (
-          <section className={styles.card}>
-            <label className={styles.field}>
-              <span>Rung</span>
+      <div className={styles.content}>
+        {/* EDIÇÃO DE RUNG */}
+        {selectedRung && !selectedBlock && (
+          <section className={styles.focusGroup}>
+            <div className={styles.fieldGroup}>
+              <label>Título da Rung</label>
               <input
                 value={selectedRung.title}
                 onFocus={() => actions.recordUndo('Editar rung')}
                 onChange={(e) => actions.updateSelectedRung({ title: e.target.value })}
-                placeholder="Ex: Partida da bomba"
                 className={styles.input}
               />
-            </label>
-            <label className={styles.field}>
-              <span>Descrição</span>
-              <input
+            </div>
+            <div className={styles.fieldGroup}>
+              <label>Documentação / Comentário</label>
+              <textarea
                 value={selectedRung.description}
-                onFocus={() => actions.recordUndo('Editar descrição da rung')}
+                onFocus={() => actions.recordUndo('Editar descrição')}
                 onChange={(e) => actions.updateSelectedRung({ description: e.target.value })}
-                placeholder="Explique o que esta lógica faz..."
-                className={styles.input}
+                className={styles.textarea}
+                rows={3}
               />
-            </label>
-            <div className={styles.actionRow}>
-              <button className={styles.secondaryBtn} onClick={() => actions.moveSelectedRung(-1)}>Subir</button>
-              <button className={styles.secondaryBtn} onClick={() => actions.moveSelectedRung(1)}>Descer</button>
-              <button className={styles.dangerBtn} onClick={actions.deleteSelectedRung}>Remover</button>
             </div>
           </section>
         )}
 
+        {/* EDIÇÃO DE BLOCO (COMUM) */}
         {selectedBlock && (
-          <section className={styles.card}>
-            <h3 className={styles.groupTitle}>Identificação</h3>
-            <label className={styles.field}>
-              <span>Label</span>
+          <section className={styles.focusGroup}>
+            <div className={styles.fieldGroup}>
+              <label>Nome Amigável (Label)</label>
               <input
                 value={selectedBlock.label}
-                onFocus={() => actions.recordUndo('Editar bloco')}
+                onFocus={() => actions.recordUndo('Editar label')}
                 onChange={(e) => actions.updateSelectedBlock({ label: e.target.value })}
-                placeholder="Ex: Sensor_A"
                 className={styles.input}
               />
-            </label>
+            </div>
+            
             <IoAddressSelector
               project={project}
               selectedBlock={selectedBlock}
@@ -119,129 +117,116 @@ export function PropertyPanel({ project, selectedBlock, selectedRung, memoryMap,
           </section>
         )}
 
-        {selectedBlock && isTimer && (
-          <section className={styles.card}>
-            <h3 className={styles.groupTitle}>Configuração de Tempo</h3>
-            <label className={styles.field}>
-              <span>Preset (Milissegundos)</span>
-              <div className={styles.inputWithHint}>
+        {/* COMPORTAMENTO DE ENTRADA (MOMENTÂNEO/RETENTIVO) */}
+        {selectedBlock && isInput && ioPoint && (
+          <section className={styles.focusGroup}>
+            <label className={styles.sectionLabel}>Comportamento do Hardware</label>
+            <div className={styles.segmentedControl}>
+              <button 
+                className={ioPoint.interactionMode === 'pulse' ? styles.activeSegment : ''} 
+                onClick={() => actions.updateIoPoint(ioPoint.id, { interactionMode: 'pulse' })}
+              >
+                Pulsar
+              </button>
+              <button 
+                className={(!ioPoint.interactionMode || ioPoint.interactionMode === 'switch') ? styles.activeSegment : ''} 
+                onClick={() => actions.updateIoPoint(ioPoint.id, { interactionMode: 'switch' })}
+              >
+                Reter
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* CONFIGURAÇÕES ESPECÍFICAS (TIMERS/COUNTERS/COMP) */}
+        {selectedBlock && (isTimer || isCounter || isComparison) && (
+          <section className={styles.focusGroup}>
+            <label className={styles.sectionLabel}>Parâmetros Técnicos</label>
+            {isTimer && (
+              <div className={styles.fieldGroup}>
+                <label>Tempo (ms)</label>
                 <input
                   type="number"
-                  inputMode="numeric"
                   value={selectedBlock.presetMs ?? ''}
-                  onFocus={() => actions.recordUndo('Editar preset')}
                   onChange={actions.handlePresetChange}
-                  placeholder="1000"
                   className={styles.input}
                 />
-                <small className={styles.hint}>
-                  {((selectedBlock.presetMs ?? 0) / 1000).toFixed(2)} segundos
-                </small>
               </div>
-            </label>
-            <div className={styles.progressStatus}>
-              <span>
-                Decorrido: <strong>{selectedBlock.elapsedMs ?? 0} ms</strong>
-              </span>
-              <div className={styles.miniProgress}>
-                <div
-                  className={styles.bar}
-                  style={{ width: `${(selectedBlock.elapsedMs ?? 0) / (selectedBlock.presetMs ?? 1) * 100}%` }}
+            )}
+            {(isCounter || isComparison) && (
+              <div className={styles.fieldGroup}>
+                <label>{isComparison ? 'Valor de Referência' : 'Preset de Contagem'}</label>
+                <input
+                  type="number"
+                  value={selectedBlock.presetCount ?? 0}
+                  onChange={actions.handlePresetCountChange}
+                  className={styles.input}
                 />
               </div>
+            )}
+            
+            {/* Live Data Visual */}
+            <div className={styles.liveStatus}>
+               <div className={styles.liveInfo}>
+                  <span>Estado Atual:</span>
+                  <strong>{isTimer ? `${selectedBlock.elapsedMs}ms` : (isCounter || isComparison ? memoryMap[selectedBlock.address!] : (selectedBlock.active ? 'Ativo' : 'Inativo'))}</strong>
+               </div>
+               {(isTimer || isCounter) && (
+                 <div className={styles.progressBar}>
+                    <div className={styles.progressFill} style={{ width: `${isTimer ? (selectedBlock.elapsedMs! / selectedBlock.presetMs! * 100) : (selectedBlock.accumulatedCount! / selectedBlock.presetCount! * 100)}%` }} />
+                 </div>
+               )}
             </div>
           </section>
         )}
 
-        {selectedBlock && isCounter && (
-          <section className={styles.card}>
-            <h3 className={styles.groupTitle}>Configuração do Contador</h3>
-            <label className={styles.field}>
-              <span>Preset de Contagem</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={selectedBlock.presetCount ?? 1}
-                onFocus={() => actions.recordUndo('Editar preset CTU')}
-                onChange={actions.handlePresetCountChange}
-                className={styles.input}
-              />
-            </label>
-            <div className={styles.progressStatus}>
-              <span>
-                Acumulado: <strong>{selectedBlock.accumulatedCount ?? 0}</strong>
-              </span>
-              <div className={styles.miniProgress}>
-                <div
-                  className={styles.barCounter}
-                  style={{ width: `${(selectedBlock.accumulatedCount ?? 0) / (selectedBlock.presetCount ?? 1) * 100}%` }}
-                />
-              </div>
-            </div>
-            <button className={styles.secondaryBtn} onClick={actions.resetSelectedCounter}>
-              Zerar Contador
-            </button>
-          </section>
-        )}
-
+        {/* FERRAMENTAS AVANÇADAS (DEBUG/FORCE) */}
         {selectedBlock && (
-          <section className={styles.card}>
-            <h3 className={styles.groupTitle}>Status e Testes</h3>
-            <div className={styles.statusRow}>
-              <div className={styles.statusItem}>
-                <span>Energizado</span>
-                <strong className={selectedBlock.active ? styles.active : ''}>
-                  {selectedBlock.active ? 'SIM' : 'NÃO'}
-                </strong>
-              </div>
-              <div className={styles.statusItem}>
-                <span>Memória</span>
-                <strong>{memoryMap[selectedBlock.address ?? selectedBlock.label] ? 'ON' : 'OFF'}</strong>
-              </div>
+          <div className={styles.advancedToggle} onClick={() => setShowAdvanced(!showAdvanced)}>
+             {showAdvanced ? '▼ Ocultar Debug' : '▶ Ferramentas de Debug (Force/Manual)'}
+          </div>
+        )}
+
+        {selectedBlock && showAdvanced && (
+          <section className={`${styles.focusGroup} ${styles.debugArea}`}>
+            <div className={styles.actionRow}>
+              <button 
+                className={`${styles.manualBtn} ${selectedBlock.active ? styles.isOn : ''}`}
+                onClick={() => actions.toggleBlock(selectedBlock)}
+              >
+                {selectedBlock.active ? 'Desligar Manual' : 'Ligar Manual'}
+              </button>
             </div>
-            <button
-              className={`${styles.testToggle} ${selectedBlock.active ? styles.isOn : ''}`}
-              onClick={() => {
-                actions.recordUndo('Alternar bloco');
-                actions.updateSelectedBlock({ active: !selectedBlock.active });
-              }}
-            >
-              {selectedBlock.active ? 'Desenergizar (Manual)' : 'Energizar (Manual)'}
-            </button>
+            <div className={styles.forceGrid}>
+               <button onClick={() => actions.setForce(selectedBlock.address!, 'on')}>Force ON</button>
+               <button onClick={() => actions.setForce(selectedBlock.address!, 'off')}>Force OFF</button>
+               <button className={styles.releaseBtn} onClick={() => actions.releaseForce(selectedBlock.address!)}>Release</button>
+            </div>
           </section>
         )}
 
-        {selectedBlock && (
-          <section className={styles.cardFooter}>
-            <div className={styles.actionRow}>
-              <button className={styles.secondaryBtn} onClick={() => actions.saveProjectToStorage(project)}>
-                Salvar
-              </button>
-              <button className={styles.secondaryBtn} onClick={actions.duplicateSelectedBlock}>
-                Duplicar
-              </button>
-            </div>
-            <div className={styles.actionRow}>
-              <button className={styles.secondaryBtn} onClick={() => actions.moveSelectedBlock(-1)}>
-                Esquerda
-              </button>
-              <button className={styles.secondaryBtn} onClick={() => actions.moveSelectedBlock(1)}>
-                Direita
-              </button>
-              <button className={styles.dangerBtn} onClick={actions.deleteSelectedBlock}>
-                Remover
-              </button>
-            </div>
-          </section>
-        )}
+        {/* AÇÕES GERAIS */}
+        <section className={styles.actionSection}>
+           <div className={styles.actionGrid}>
+              {selectedRung && !selectedBlock && (
+                <>
+                  <button onClick={() => actions.moveSelectedRung(-1)}>Mover ⬆</button>
+                  <button onClick={() => actions.moveSelectedRung(1)}>Mover ⬇</button>
+                  <button onClick={actions.duplicateSelectedRung}>Duplicar</button>
+                  <button className={styles.danger} onClick={actions.deleteSelectedRung}>Deletar Rung</button>
+                </>
+              )}
+              {selectedBlock && (
+                <>
+                  <button onClick={() => actions.moveSelectedBlock(-1)}>⬅ Mover</button>
+                  <button onClick={() => actions.moveSelectedBlock(1)}>Mover ➡</button>
+                  <button onClick={actions.duplicateSelectedBlock}>Duplicar</button>
+                  <button className={styles.danger} onClick={actions.deleteSelectedBlock}>Remover</button>
+                </>
+              )}
+           </div>
+        </section>
       </div>
-
-      <WatchTable
-        items={watchItems}
-        onToggleMemory={actions.toggleMemory}
-        onForce={actions.setForce}
-        onReleaseForce={actions.releaseForce}
-      />
-    </FullScreenPanel>
+    </div>
   );
 }

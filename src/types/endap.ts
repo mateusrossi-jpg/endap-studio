@@ -44,6 +44,7 @@ export type EndapIoPoint = {
   reserved: boolean;
   manualMode: boolean;
   testMode: boolean;
+  interactionMode?: 'switch' | 'pulse'; // Default is switch
 };
 
 export type EndapFailSafeAction = 'KEEP_LAST' | 'FORCE_OFF' | 'FORCE_ON' | 'SAFE_VALUE';
@@ -113,7 +114,9 @@ export type EndapLadderBlockKind =
   | 'coil'
   | 'coil-set'
   | 'coil-reset'
-  | 'counter-reset';
+  | 'counter-reset'
+  | 'compare-grt'
+  | 'compare-les';
 
 export type EndapLadderBlock = {
   id: string;
@@ -126,12 +129,27 @@ export type EndapLadderBlock = {
   presetCount?: number;
   accumulatedCount?: number;
   previousInput?: boolean;
+  col?: number;
 };
 
 export type EndapLadderBranch = {
   id: string;
   title?: string;
+  anchorBlockId?: string;
   blocks: EndapLadderBlock[];
+};
+
+export type EndapTagType = 'input' | 'output' | 'memory' | 'timer' | 'counter';
+export type EndapTagDataType = 'bool' | 'int' | 'time';
+
+export type EndapTag = {
+  id: string;
+  name: string;
+  type: EndapTagType;
+  dataType: EndapTagDataType;
+  value: boolean | number;
+  description?: string;
+  ioPointId?: string; // If mapped to physical IO
 };
 
 export type EndapLadderRung = {
@@ -182,6 +200,7 @@ export type EndapProject = {
   gateway: EndapGateway;
   nodes: EndapNode[];
   io: EndapIoPoint[];
+  tags: EndapTag[]; // Global Tag Database
   failSafePolicies: EndapFailSafePolicy[];
   alerts: EndapAlert[];
   diagnostics: EndapDiagnosticMetric[];

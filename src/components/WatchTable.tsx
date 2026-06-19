@@ -28,7 +28,7 @@ export function WatchTable({ items, onToggleMemory, onForce, onReleaseForce }: W
         <div className="watch-list">
           {items.map((item) => (
             <div className={`watch-row ${item.force ? 'is-forced' : ''}`} key={`${item.type}-${item.address}`}>
-              <span className={`watch-dot ${item.active ? 'is-active' : ''}`} />
+              <span className={`led-indicator ${item.active ? 'is-running' : ''}`} style={{ animation: 'none' }} />
               <strong>{item.address}</strong>
               <small>{item.type}</small>
               <code>{item.force ? `FORCE ${item.force.toUpperCase()}` : item.value}</code>
