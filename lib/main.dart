@@ -1,8 +1,18 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'ladder/ui/editor/ladder_editor_page.dart';
 
 void main() {
   runApp(const EndapStudioApp());
+}
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class EndapStudioApp extends StatelessWidget {
@@ -12,6 +22,7 @@ class EndapStudioApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Endap Studio',
+      scrollBehavior: AppScrollBehavior(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,

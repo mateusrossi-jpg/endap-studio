@@ -41,8 +41,16 @@ class GraphValidator {
         n.type == NodeType.contactNC ||
         n.type == NodeType.compareEqual ||
         n.type == NodeType.compareGreater ||
-        n.type == NodeType.compareLess);
-    final hasOutput = network.nodes.any((n) => n.type == NodeType.coil || n.type == NodeType.timerTON || n.type == NodeType.counterCTU || n.type == NodeType.coilSet || n.type == NodeType.coilReset);
+        n.type == NodeType.compareLess ||
+        n.type == NodeType.parallel);
+    final hasOutput = network.nodes.any((n) =>
+        n.type == NodeType.coil ||
+        n.type == NodeType.timerTON ||
+        n.type == NodeType.timerTOF ||
+        n.type == NodeType.counterCTU ||
+        n.type == NodeType.counterCTD ||
+        n.type == NodeType.coilSet ||
+        n.type == NodeType.coilReset);
 
     if (!hasInput) {
       errors.add(GraphValidationError(

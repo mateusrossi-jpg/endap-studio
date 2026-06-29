@@ -12,8 +12,7 @@ class NodeRuntimeState {
   // Controle de contagem (Para CTU, CTD)
   int counterValue;
 
-  // Flags auxiliares especificas para blocos (Ex: .DN (Done), .EN (Enabled), .TT (Timing))
-  // NOTA (Divida tecnica registrada): Substituir por NodeRuntimeFlags no futuro
+  final Map<String, NodeRuntimeState> subNodeStates = {};
   Map<String, bool> runtimeFlags;
 
   NodeRuntimeState({

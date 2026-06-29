@@ -7,11 +7,13 @@ class LadderNode {
   final NodeType type;
   NodeConfig config;
   bool isEnergized = false;
+  List<List<LadderNode>>? branches;
 
   LadderNode({
     required this.id,
     required this.type,
     required this.config,
+    this.branches,
   });
 
   String get symbol {
@@ -29,35 +31,39 @@ class LadderNode {
       case NodeType.coilReset:
         return tag != null && tag.isNotEmpty ? '( R $tag )' : '( RESET )';
       case NodeType.timerTON:
+      case NodeType.timerTOF:
+        final prefix = type == NodeType.timerTON ? 'TON' : 'TOF';
         if (tag != null && tag.isNotEmpty) {
           if (preset != null) {
-            return '[ TON $tag ${preset}ms ]';
+            return '[ $prefix $tag ${preset}ms ]';
           }
-          return '[ TON $tag ]';
+          return '[ $prefix $tag ]';
         }
         if (preset != null) {
-          return '[ TON ${preset}ms ]';
+          return '[ $prefix ${preset}ms ]';
         }
-        return '[ TON ]';
-            case NodeType.counterCTU:
+        return '[ $prefix ]';
+      case NodeType.counterCTU:
+      case NodeType.counterCTD:
+        final prefix = type == NodeType.counterCTU ? 'CTU' : 'CTD';
         if (tag != null && tag.isNotEmpty) {
           if (preset != null) {
-            return '[ CTU $tag $preset ]';
+            return '[ $prefix $tag $preset ]';
           }
-          return '[ CTU $tag ]';
+          return '[ $prefix $tag ]';
         }
         if (preset != null) {
-          return '[ CTU $preset ]';
+          return '[ $prefix $preset ]';
         }
-        return '[ CTU ]';
+        return '[ $prefix ]';
       case NodeType.compareEqual:
         return _formatCompareSymbol('EQU');
       case NodeType.compareGreater:
         return _formatCompareSymbol('GRT');
       case NodeType.compareLess:
         return _formatCompareSymbol('LES');
-      default:
-        return '[ ? ]';
+      case NodeType.parallel:
+        return '[ PARALLEL ]';
     }
   }
 
@@ -79,6 +85,7 @@ class LadderNode {
       id: id,
       type: type,
       config: config.clone(),
+      branches: branches?.map((list) => list.map((node) => node.clone()).toList()).toList(),
     )..isEnergized = isEnergized;
   }
 
@@ -86,11 +93,19 @@ class LadderNode {
         'id': id,
         'type': type.name,
         'config': config.toJson(),
+        if (branches != null) 'branches': branches!.map((list) => list.map((node) => node.toJson()).toList()).toList(),
       };
 
   factory LadderNode.fromJson(Map<String, dynamic> json) => LadderNode(
         id: json['id'] as String,
         type: NodeType.values.byName(json['type'] as String),
         config: NodeConfig.fromJson(json['config'] as Map<String, dynamic>),
+        branches: json['branches'] != null
+            ? (json['branches'] as List<dynamic>)
+                .map((list) => (list as List<dynamic>)
+                    .map((item) => LadderNode.fromJson(item as Map<String, dynamic>))
+                    .toList())
+                .toList()
+            : null,
       );
 }

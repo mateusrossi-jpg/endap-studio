@@ -5,6 +5,7 @@ import 'evaluators/coil_evaluator.dart';
 import 'evaluators/timer_evaluator.dart';
 import 'evaluators/counter_evaluator.dart';
 import 'evaluators/compare_evaluator.dart';
+import 'evaluators/parallel_evaluator.dart';
 
 class EvaluatorRegistry {
   final Map<NodeType, NodeEvaluator> _registry = {};
@@ -35,6 +36,8 @@ class EvaluatorRegistry {
     register(NodeType.compareEqual, compareEval);
     register(NodeType.compareGreater, compareEval);
     register(NodeType.compareLess, compareEval);
+
+    register(NodeType.parallel, ParallelEvaluator());
   }
 
   void register(NodeType type, NodeEvaluator evaluator) {

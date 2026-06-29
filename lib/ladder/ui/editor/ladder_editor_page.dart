@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../ladder_autosave.dart';
@@ -10,11 +9,12 @@ import '../../models/node_config.dart';
 import '../../models/tag.dart';
 import '../../models/tag_value.dart';
 import '../../models/enums.dart';
-import '../../simulation/ladder_simulation_controller.dart';
-import '../../ui/editor/utils.dart';
 import '../../validation/graph_validator.dart';
 import 'file_helper.dart';
 import '../../runtime/ladder_runtime.dart';
+import 'widgets/variables_panel.dart';
+import 'widgets/rung_list.dart';
+import 'widgets/ladder_toolbox.dart';
 
 class LadderEditorPage extends StatefulWidget {
   const LadderEditorPage({super.key});
@@ -31,7 +31,6 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   late LadderProject _project;
   bool _initialized = false;
   bool _isDraggingNode = false;
-  bool _isVariablesPanelExpanded = false;
   final LadderRuntime _runtime = LadderRuntime();
 
   // Active inputs during simulation
@@ -692,6 +691,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
                   _saveProject();
                 });
                 if (mounted) {
+      if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Projeto importado com sucesso!')),
                   );
@@ -705,6 +705,7 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
             onPressed: () async {
               await exportProject(_project);
               if (mounted) {
+      if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Projeto exportado para download!')),
                 );
@@ -716,11 +717,11 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
       ),
       body: Column(
         children: [
-          _buildComponentToolbox(),
+          _buildComponentToolboxWrapper(),
           Expanded(
-            child: _project.networks.isEmpty ? _buildEmptyState() : _buildRungList(),
+            child: _project.networks.isEmpty ? _buildEmptyState() : _buildRungListWrapper(),
           ),
-          _buildVariablesPanel(),
+          _buildVariablesPanelWrapper(),
         ],
       ),
       floatingActionButton: _project.networks.isNotEmpty
@@ -741,190 +742,23 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     );
   }
 
-  Widget _buildVariablesPanel() {
-    final tags = _project.tags.values.toList();
-    final textController = TextEditingController();
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(top: BorderSide(color: Color(0xFF334155), width: 1.5)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header (Click to expand/collapse)
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isVariablesPanelExpanded = !_isVariablesPanelExpanded;
-              });
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.tune, color: Colors.blueAccent, size: 20),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Monitor de Variáveis & I/O',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(10)),
-                        child: Text(
-                          '${tags.length}',
-                          style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Icon(
-                    _isVariablesPanelExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-                    color: Colors.grey,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          // Expanded Content
-          if (_isVariablesPanelExpanded) ...[
-            const Divider(height: 1, color: Color(0xFF334155)),
-            
-            // Add Variable Input Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 38,
-                      child: TextField(
-                        controller: textController,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Nova Tag (ex: BOTAO_LIGA, LED)',
-                          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 12),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onSubmitted: (val) {
-                          _addVariable(val);
-                          textController.clear();
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () {
-                      _addVariable(textController.text);
-                      textController.clear();
-                    },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Variables List
-            Container(
-              constraints: const BoxConstraints(maxHeight: 180),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.only(bottom: 12),
-                itemCount: tags.length,
-                itemBuilder: (context, index) {
-                  final tag = tags[index];
-                  final isValueTrue = _simulationInputs[tag.id] ?? false;
-                  
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            // LED Indicator
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isValueTrue ? Colors.greenAccent : Colors.grey[700],
-                                boxShadow: isValueTrue
-                                    ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.6), blurRadius: 4)]
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              tag.id,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            // Switch to force value
-                            SizedBox(
-                              height: 24,
-                              child: Switch(
-                                value: isValueTrue,
-                                activeColor: Colors.greenAccent,
-                                onChanged: (val) {
-                                  setState(() {
-                                    _simulationInputs[tag.id] = val;
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Delete button
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () {
-                                setState(() {
-                                  _project.tags.remove(tag.id);
-                                  _simulationInputs.remove(tag.id);
-                                  _saveProject();
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ],
-      ),
+  Widget _buildVariablesPanelWrapper() {
+    return VariablesPanel(
+      tags: _project.tags,
+      simulationInputs: _simulationInputs,
+      onTagAdded: _addVariable,
+      onTagRemoved: (tagId) {
+        setState(() {
+          _project.tags.remove(tagId);
+          _simulationInputs.remove(tagId);
+          _saveProject();
+        });
+      },
+      onSimulationInputChanged: (tagId, val) {
+        setState(() {
+          _simulationInputs[tagId] = val;
+        });
+      },
     );
   }
 
@@ -1007,836 +841,54 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     );
   }
 
-  Widget _buildRungList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: _project.networks.length,
-      itemBuilder: (context, index) {
-        final rung = _project.networks[index];
-        final rungError = _networkValidationErrors[rung.id];
-        
-        return Card(
-          color: const Color(0xFF1E293B),
-          elevation: 3,
-          margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Text('RUNG ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 14)),
-                        if (rungError != null) ...[
-                          const SizedBox(width: 8),
-                          Tooltip(
-                            message: rungError,
-                            child: const Icon(Icons.warning, color: Colors.amberAccent, size: 18),
-                          ),
-                        ]
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_sweep, color: Colors.redAccent, size: 22),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: const Color(0xFF1E293B),
-                            title: const Text('Confirmar Remoção', style: TextStyle(color: Colors.white)),
-                            content: const Text('Deseja excluir este degrau inteiro?', style: TextStyle(color: Colors.grey)),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Remover', style: TextStyle(color: Colors.white)),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          setState(() {
-                            _project.networks.removeAt(index);
-                            _saveProject();
-                          });
-                        }
-                      },
-                    )
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      // Rail Left
-                      Container(
-                        width: 4,
-                        height: 60,
-                        color: Colors.blueAccent,
-                      ),
-                      const SizedBox(width: 12),
-                      ...List.generate(rung.nodes.length, (i) {
-                        final node = rung.nodes[i];
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            LongPressDraggable<Map<String, dynamic>>(
-                              data: {
-                                'type': 'move',
-                                'srcRung': index,
-                                'srcNode': i,
-                              },
-                              onDragStarted: () {
-                                setState(() {
-                                  _isDraggingNode = true;
-                                });
-                              },
-                              onDragEnd: (details) {
-                                setState(() {
-                                  _isDraggingNode = false;
-                                });
-                              },
-                              onDraggableCanceled: (velocity, offset) {
-                                setState(() {
-                                  _isDraggingNode = false;
-                                });
-                              },
-                              feedback: Material(
-                                color: Colors.transparent,
-                                child: Opacity(
-                                  opacity: 0.7,
-                                  child: _buildLadderNodeVisual(node, false),
-                                ),
-                              ),
-                              childWhenDragging: Opacity(
-                                opacity: 0.3,
-                                child: _buildLadderNodeVisual(node, false),
-                              ),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedRungIndex = index;
-                                    _selectedNodeIndex = i;
-                                  });
-                                  _showEditNodeBottomSheet(index, i);
-                                },
-                                onLongPress: () {
-                                  _showNodeOptionsBottomSheet(index, i);
-                                },
-                                child: _buildLadderNodeVisual(
-                                  node,
-                                  _selectedRungIndex == index && _selectedNodeIndex == i,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Connection Line
-                            Container(
-                              width: 24,
-                              height: 2,
-                              color: node.isEnergized ? Colors.greenAccent : Colors.grey[600],
-                            ),
-                            const SizedBox(width: 8),
-                            // Add button inside row with Drag and Drop support
-                            DragTarget<Object>(
-                              onWillAcceptWithDetails: (details) => true,
-                              onAcceptWithDetails: (details) {
-                                final data = details.data;
-                                if (data is NodeType) {
-                                  final newNode = LadderNode(
-                                    id: 'node_${DateTime.now().microsecondsSinceEpoch}',
-                                    type: data,
-                                    config: NodeConfig(),
-                                  );
-                                  setState(() {
-                                    _project.networks[index].insertNode(newNode, i + 1);
-                                    _saveProject();
-                                  });
-                                  _showEditNodeBottomSheet(index, i + 1);
-                                } else if (data is Map<String, dynamic> && data['type'] == 'move') {
-                                  final srcRung = data['srcRung'] as int;
-                                  final srcNode = data['srcNode'] as int;
-                                  final nodeToMove = _project.networks[srcRung].nodes[srcNode];
-                                  
-                                  setState(() {
-                                    _project.networks[srcRung].removeNodeAt(srcNode);
-                                    int insertIdx = i + 1;
-                                    if (srcRung == index && srcNode < i + 1) {
-                                      insertIdx = i;
-                                    }
-                                    _project.networks[index].insertNode(nodeToMove, insertIdx);
-                                    _saveProject();
-                                  });
-                                }
-                              },
-                              builder: (context, candidateData, rejectedData) {
-                                final isHovered = candidateData.isNotEmpty;
-                                return InkWell(
-                                  onTap: () => _showComponentBottomSheet(index, i + 1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: isHovered 
-                                          ? Colors.yellowAccent.withValues(alpha: 0.3)
-                                          : Colors.green.withValues(alpha: 0.2),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isHovered ? Colors.yellowAccent : Colors.greenAccent, 
-                                        width: isHovered ? 2.5 : 1.5,
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      isHovered ? Icons.download : Icons.add, 
-                                      color: isHovered ? Colors.yellowAccent : Colors.greenAccent, 
-                                      size: 18,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 24,
-                              height: 2,
-                              color: (i + 1 < rung.nodes.length && rung.nodes[i + 1].isEnergized) ? Colors.greenAccent : Colors.grey[600],
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                        );
-                      }),
-                      // End insert button if empty or at the end with Drag and Drop support
-                      DragTarget<Object>(
-                        onWillAcceptWithDetails: (details) => true,
-                        onAcceptWithDetails: (details) {
-                          final data = details.data;
-                          if (data is NodeType) {
-                            final newNode = LadderNode(
-                              id: 'node_${DateTime.now().microsecondsSinceEpoch}',
-                              type: data,
-                              config: NodeConfig(),
-                            );
-                            setState(() {
-                              _project.networks[index].addNode(newNode);
-                              _saveProject();
-                            });
-                            _showEditNodeBottomSheet(index, _project.networks[index].nodes.length - 1);
-                          } else if (data is Map<String, dynamic> && data['type'] == 'move') {
-                            final srcRung = data['srcRung'] as int;
-                            final srcNode = data['srcNode'] as int;
-                            final nodeToMove = _project.networks[srcRung].nodes[srcNode];
-                            
-                            setState(() {
-                              _project.networks[srcRung].removeNodeAt(srcNode);
-                              _project.networks[index].addNode(nodeToMove);
-                              _saveProject();
-                            });
-                          }
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          final isHovered = candidateData.isNotEmpty;
-                          return InkWell(
-                            onTap: () => _showComponentBottomSheet(index),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: isHovered
-                                    ? Colors.yellowAccent.withValues(alpha: 0.3)
-                                    : Colors.blue.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isHovered ? Colors.yellowAccent : Colors.blueAccent, 
-                                  width: isHovered ? 2.5 : 1.5,
-                                ),
-                              ),
-                              child: Icon(
-                                isHovered ? Icons.download : Icons.add, 
-                                color: isHovered ? Colors.yellowAccent : Colors.blueAccent, 
-                                size: 22,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      // Rail Right
-                      Container(
-                        width: 4,
-                        height: 60,
-                        color: Colors.blueAccent,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+  Widget _buildRungListWrapper() {
+    return RungList(
+      project: _project,
+      runtime: _runtime,
+      networkValidationErrors: _networkValidationErrors,
+      selectedRungIndex: _selectedRungIndex,
+      selectedNodeIndex: _selectedNodeIndex,
+      onDraggingStateChanged: (isDragging) {
+        setState(() {
+          _isDraggingNode = isDragging;
+        });
       },
+      onProjectChanged: () {
+        setState(() {
+          _saveProject();
+        });
+      },
+      onNodeSelectionChanged: (rung, node) {
+        setState(() {
+          _selectedRungIndex = rung;
+          _selectedNodeIndex = node;
+        });
+      },
+      onNodeEditRequest: _showEditNodeBottomSheet,
+      onNodeOptionsRequest: _showNodeOptionsBottomSheet,
+      onComponentAddRequest: (rung, [insertIndex]) => _showComponentBottomSheet(rung, insertIndex),
     );
   }
 
-  Widget _buildLadderNodeVisual(LadderNode node, bool isSelected) {
-    final int ms = DateTime.now().millisecondsSinceEpoch;
-    // Calculate pulse multiplier (goes from 0.0 to 1.0 back and forth over 1.5 seconds)
-    final double pulse = (math.sin(ms * 2 * math.pi / 1500) + 1.0) / 2.0;
-    final double glowRadius = node.isEnergized ? 4.0 + (pulse * 8.0) : 0.0;
-    final double glowOpacity = node.isEnergized ? 0.2 + (pulse * 0.4) : 0.0;
 
-    final color = node.isEnergized ? Colors.greenAccent : Colors.grey[400]!;
-    final bgColor = node.isEnergized
-        ? Colors.greenAccent.withValues(alpha: 0.08)
-        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.08) : const Color(0xFF1E293B));
-    final borderColor = isSelected
-        ? Colors.yellowAccent
-        : (node.isEnergized ? Colors.greenAccent : Colors.grey[700]!);
-
-    final tagText = node.config.tagId ?? '-';
-    final hasTag = node.config.tagId != null && node.config.tagId!.isNotEmpty;
-
-    // Renders matching symbols visually
-    Widget symbolWidget;
-    switch (node.type) {
-      case NodeType.contactNO:
-        symbolWidget = SizedBox(
-          width: 64,
-          height: 54,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Horizontal connection lines
-              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
-              // Left contact bar
-              Positioned(left: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
-              // Right contact bar
-              Positioned(right: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
-              // Clear center block so connection line doesn't pass through
-              Positioned(left: 24, right: 24, height: 32, child: Container(color: Colors.transparent)),
-              // Tag text top
-              Positioned(
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
-                  child: Text(
-                    tagText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-        break;
-
-      case NodeType.contactNC:
-        symbolWidget = SizedBox(
-          width: 64,
-          height: 54,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Horizontal connection lines
-              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
-              // Left contact bar
-              Positioned(left: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
-              // Right contact bar
-              Positioned(right: 20, top: 12, bottom: 12, child: Container(width: 4, color: color)),
-              // Diagonal slash (Normally Closed indicator)
-              Positioned(
-                left: 22,
-                right: 22,
-                top: 14,
-                bottom: 14,
-                child: CustomPaint(
-                  painter: _DiagonalLinePainter(color: color),
-                ),
-              ),
-              // Tag text top
-              Positioned(
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
-                  child: Text(
-                    tagText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-        break;
-
-      case NodeType.coil:
-      case NodeType.coilSet:
-      case NodeType.coilReset:
-        final String label = node.type == NodeType.coil
-            ? 'OUT'
-            : (node.type == NodeType.coilSet ? 'S' : 'R');
-        symbolWidget = SizedBox(
-          width: 64,
-          height: 54,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Horizontal connection lines
-              Positioned(left: 0, right: 0, height: 2, child: Container(color: color)),
-              // Coil symbol (circle with label)
-              Positioned(
-                width: 32,
-                height: 32,
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color, width: 2),
-                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.transparent,
-                  ),
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-              // Tag text top
-              Positioned(
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
-                  child: Text(
-                    tagText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: hasTag ? (node.isEnergized ? Colors.greenAccent : Colors.white) : Colors.grey[500],
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-        break;
-
-      case NodeType.timerTON:
-      case NodeType.counterCTU:
-        final prefix = node.type == NodeType.timerTON ? 'TON' : 'CTU';
-        final preset = node.config.presetValue?.intValue?.toString() ?? '0';
-        final isTimer = node.type == NodeType.timerTON;
-        final runState = _runtime.nodeStates[node.id];
-        final accValue = isTimer 
-            ? (runState?.accumulatedTimeMs ?? 0) 
-            : (runState?.counterValue ?? 0);
-            
-        symbolWidget = Container(
-          width: 96,
-          height: 64,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(color: borderColor, width: 2),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              if (node.isEnergized)
-                BoxShadow(
-                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
-                  blurRadius: glowRadius,
-                  spreadRadius: glowRadius / 2,
-                ),
-              if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '$prefix: $tagText',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'ACC: $accValue${isTimer ? 'ms' : ''}',
-                style: const TextStyle(fontSize: 8, color: Colors.greenAccent, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'PRE: $preset${isTimer ? 'ms' : ''}',
-                style: const TextStyle(fontSize: 8, color: Colors.grey),
-              ),
-            ],
-          ),
-        );
-        break;
-
-      case NodeType.compareEqual:
-      case NodeType.compareGreater:
-      case NodeType.compareLess:
-        final prefix = node.type == NodeType.compareEqual
-            ? 'EQU'
-            : (node.type == NodeType.compareGreater ? 'GRT' : 'LES');
-        final operator = node.type == NodeType.compareEqual
-            ? '='
-            : (node.type == NodeType.compareGreater ? '>' : '<');
-        final tagA = node.config.tagId ?? 'A';
-        final valB = node.config.presetValue;
-        String tagBText = '';
-        if (valB != null) {
-          if (valB.stringValue != null) {
-            tagBText = valB.stringValue!;
-          } else if (valB.intValue != null) {
-            tagBText = valB.intValue.toString();
-          } else if (valB.realValue != null) {
-            tagBText = valB.realValue.toString();
-          } else if (valB.boolValue != null) {
-            tagBText = valB.boolValue.toString();
-          }
-        } else {
-          tagBText = 'B';
-        }
-        
-        final storeValA = _runtime.tagStore.getValue(tagA);
-        final storeValB = valB != null && valB.stringValue != null ? _runtime.tagStore.getValue(valB.stringValue!) : null;
-        
-        String displayValA = '';
-        if (storeValA != null) {
-          displayValA = storeValA.boolValue?.toString() ?? storeValA.intValue?.toString() ?? storeValA.realValue?.toString() ?? storeValA.stringValue ?? '';
-        }
-        
-        String displayValB = '';
-        if (storeValB != null) {
-          displayValB = storeValB.boolValue?.toString() ?? storeValB.intValue?.toString() ?? storeValB.realValue?.toString() ?? storeValB.stringValue ?? '';
-        } else if (valB != null && valB.stringValue == null) {
-          displayValB = tagBText;
-        }
-
-        symbolWidget = Container(
-          width: 96,
-          height: 64,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(color: borderColor, width: 2),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              if (node.isEnergized)
-                BoxShadow(
-                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
-                  blurRadius: glowRadius,
-                  spreadRadius: glowRadius / 2,
-                ),
-              if (isSelected)
-                BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                prefix,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  tagA,
-                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              if (displayValA.isNotEmpty)
-                Text(
-                  '($displayValA)',
-                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
-                ),
-              Text(
-                operator,
-                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  tagBText,
-                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              if (displayValB.isNotEmpty && displayValB != tagBText)
-                Text(
-                  '($displayValB)',
-                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-          ),
-        );
-        break;
-      default:
-        symbolWidget = Text(node.symbol);
-    }
-
-    if (node.type == NodeType.timerTON ||
-        node.type == NodeType.counterCTU ||
-        node.type == NodeType.compareEqual ||
-        node.type == NodeType.compareGreater ||
-        node.type == NodeType.compareLess) {
-      return symbolWidget;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: Border.all(color: borderColor, width: 1.5),
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          if (node.isEnergized)
-            BoxShadow(
-              color: Colors.greenAccent.withValues(alpha: glowOpacity),
-              blurRadius: glowRadius,
-              spreadRadius: glowRadius / 2,
-            ),
-          if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.2), blurRadius: 4),
-        ],
-      ),
-      child: symbolWidget,
-    );
-  }
-
-  Widget _buildComponentToolbox() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFF334155), width: 1.5),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _isDraggingNode 
-                ? 'Arraste aqui para Excluir o Elemento:' 
-                : 'Paleta de Componentes (Arraste para o Rung):',
-            style: TextStyle(
-              color: _isDraggingNode ? Colors.redAccent : Colors.grey, 
-              fontWeight: FontWeight.bold, 
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _isDraggingNode
-              ? _buildTrashDropZone()
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
-                      _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
-                      _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
-                      _buildDraggableToolboxItem('Bobina SET', NodeType.coilSet, Icons.subdirectory_arrow_right),
-                      _buildDraggableToolboxItem('Bobina RST', NodeType.coilReset, Icons.settings_backup_restore),
-                      _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
-                      _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
-                      _buildDraggableToolboxItem('Igual (EQU)', NodeType.compareEqual, Icons.compare_arrows),
-                      _buildDraggableToolboxItem('Maior (GRT)', NodeType.compareGreater, Icons.arrow_upward),
-                      _buildDraggableToolboxItem('Menor (LES)', NodeType.compareLess, Icons.arrow_downward),
-                    ],
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrashDropZone() {
-    return DragTarget<Map<String, dynamic>>(
-      onWillAcceptWithDetails: (details) => details.data['type'] == 'move',
-      onAcceptWithDetails: (details) {
-        final srcRung = details.data['srcRung'] as int;
-        final srcNode = details.data['srcNode'] as int;
+  Widget _buildComponentToolboxWrapper() {
+    return LadderToolbox(
+      isDraggingNode: _isDraggingNode,
+      onNodeDeleted: (srcRung, srcNode) {
         setState(() {
           _project.networks[srcRung].removeNodeAt(srcNode);
           _saveProject();
           _isDraggingNode = false;
         });
       },
-      builder: (context, candidateData, rejectedData) {
-        final isHovered = candidateData.isNotEmpty;
-        return Container(
-          width: double.infinity,
-          height: 48,
-          decoration: BoxDecoration(
-            color: isHovered ? Colors.redAccent.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.05),
-            border: Border.all(
-              color: isHovered ? Colors.redAccent : Colors.red.withValues(alpha: 0.5), 
-              width: isHovered ? 2.5 : 1.5,
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.delete_sweep, color: isHovered ? Colors.redAccent : Colors.red[300]),
-              const SizedBox(width: 8),
-              Text(
-                isHovered ? 'Solte para Excluir!' : 'Solte o elemento aqui para remover',
-                style: TextStyle(
-                  color: isHovered ? Colors.redAccent : Colors.red[300], 
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
-  Widget _buildDraggableToolboxItem(String label, NodeType type, IconData icon) {
-    final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
-    
-    return Draggable<NodeType>(
-      data: type,
-      feedback: Material(
-        color: Colors.transparent,
-        child: Opacity(
-          opacity: 0.8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.3),
-              border: Border.all(color: Colors.blueAccent, width: 2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              tempNode.symbol,
-              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.4,
-        child: _buildToolboxCard(label, icon, type),
-      ),
-      child: _buildToolboxCard(label, icon, type),
-    );
-  }
+  
 
-  Widget _buildToolboxCard(String label, IconData icon, NodeType type) {
-    final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF1E293B).withOpacity(0.8),
-            const Color(0xFF334155).withOpacity(0.5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: const Color(0xFF475569).withOpacity(0.5),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 18, color: Colors.blueAccent),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                tempNode.symbol,
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 9,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  
+
+  
 }
 
-class _DiagonalLinePainter extends CustomPainter {
-  final Color color;
-  _DiagonalLinePainter({required this.color});
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-    // Draw diagonal slash from bottom-left to top-right
-    canvas.drawLine(Offset(0, size.height), Offset(size.width, 0), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _DiagonalLinePainter oldDelegate) => oldDelegate.color != color;
-}

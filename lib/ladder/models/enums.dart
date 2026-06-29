@@ -1,5 +1,9 @@
 enum TagType { bool, int, dint, real, string, timer, counter }
 
+enum PortDataType { boolean, analogFloat, timeDuration }
+
+enum PortDirection { input, output }
+
 enum NodeType {
   contactNO,
   contactNC,
@@ -12,5 +16,6 @@ enum NodeType {
   coilReset,
   compareEqual,
   compareGreater,
-  compareLess
+  compareLess,
+  parallel
 }

@@ -84,3 +84,75 @@ IA, MQTT, Modbus, Mesh, ESP-NOW, Analytics, Cloud, etc. -> Registrar e adiar.
 
 ## VEREDITO DE CLASSIFICAÇÃO
 Terminar com a classificação (MVP CRÍTICO, IMPORTANTE, PÓS-MVP ou FUTURO) e justificativa.
+
+# ENDAP STUDIO — CONSTITUIÇÃO DE UX/UI
+
+STATUS: OBRIGATÓRIO
+
+A partir deste momento o Endap Studio deixa de ser tratado como um aplicativo comum.
+Ele passa a ser tratado como uma ferramenta de programação Ladder profissional para smartphone.
+
+Antes de qualquer alteração responder:
+1. Esta mudança aumenta ou reduz a área útil do Ladder?
+2. Esta mudança aproxima ou afasta o Studio de uma ferramenta industrial?
+3. Esta mudança adiciona complexidade desnecessária?
+4. Esta mudança pode ser usada com uma mão?
+5. Esta mudança exige muitos toques?
+6. Esta mudança cria poluição visual?
+
+Se qualquer resposta for negativa: PARAR. Não implementar.
+
+## PRINCÍPIO FUNDAMENTAL
+O Ladder é o protagonista. Todo o resto é suporte.
+O usuário abriu o Studio para programar. Não para navegar menus, ver cards, dashboards ou widgets.
+
+## REGRA DE OURO
+Sempre priorizar: Área útil do Ladder > Paleta > Monitor > Configurações > Menus
+
+## PROIBIDO
+❌ Cards gigantes
+❌ Componentes ocupando metade da tela
+❌ Barras permanentes desnecessárias
+❌ Painéis laterais fixos
+❌ Menus flutuantes complexos
+❌ Estados duplicados
+❌ Estruturas paralelas
+❌ Layout inspirado em SaaS
+❌ UX de dashboard
+
+## PERMITIDO
+✅ Bottom sheets
+✅ Menus contextuais
+✅ Scroll horizontal
+✅ Drag and drop
+✅ Seleção por toque
+✅ Gestos
+✅ Zoom
+✅ Pan
+✅ Long press
+
+## PALETA DE COMPONENTES
+A paleta deve permanecer horizontal. Scroll horizontal. Não utilizar grid nem cards grandes.
+Formato obrigatório: [ NO ][ NC ][ COIL ][ TON ][ TOF ][ CTU ][ CTD ]
+Cada item deve possuir apenas símbolo e legenda curta.
+
+## INSERÇÃO DE COMPONENTES
+Devem existir dois modos coexistindo:
+* **Modo 1:** Selecionar componente -> Tocar no local -> Inserir
+* **Modo 2:** Long Press -> Drag and Drop -> Inserir
+
+## MONITOR DE VARIÁVEIS
+Não ocupar espaço permanente. Deve ser recolhível (Preferência: Bottom Sheet com estados Fechado, Semi-aberto, Expandido).
+
+## RUNGS
+Não representar rungs como cards. Representar como linhas de programação, com visual inspirado no Studio 5000, Codesys ou TIA Portal.
+
+## EXECUÇÃO
+Estados devem aparecer diretamente sobre o Ladder. Não criar painéis extras.
+* Contato energizado: verde
+* Bobina ativa: verde
+* Timer: indicador visual discreto
+
+## OBJETIVO
+Transformar o Endap Studio em uma ferramenta Ladder profissional mobile-first. Toda decisão futura deve favorecer: programação mais rápida, menos toques, mais área útil, menos distrações.
+

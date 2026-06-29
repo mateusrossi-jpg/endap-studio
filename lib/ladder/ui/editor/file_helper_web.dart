@@ -7,7 +7,7 @@ Future<void> exportProject(LadderProject project) async {
     final jsonString = jsonEncode(project.toJson());
     final blob = html.Blob([jsonString], 'application/json');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
+    html.AnchorElement(href: url)
       ..setAttribute('download', '${project.name.replaceAll(' ', '_')}_ladder.json')
       ..click();
     html.Url.revokeObjectUrl(url);

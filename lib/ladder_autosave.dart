@@ -6,7 +6,7 @@ const String _kAutosaveKey = 'endap_ladder_autosave';
 
 Future<void> saveCurrentLadder(LadderProject project) async {
   try {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance().timeout(const Duration(seconds: 1));
     final jsonString = jsonEncode(project.toJson());
     await prefs.setString(_kAutosaveKey, jsonString);
   } catch (e) {
@@ -16,7 +16,7 @@ Future<void> saveCurrentLadder(LadderProject project) async {
 
 Future<LadderProject?> loadCurrentLadder() async {
   try {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance().timeout(const Duration(seconds: 1));
     final jsonString = prefs.getString(_kAutosaveKey);
     if (jsonString != null && jsonString.isNotEmpty) {
       final map = jsonDecode(jsonString) as Map<String, dynamic>;
