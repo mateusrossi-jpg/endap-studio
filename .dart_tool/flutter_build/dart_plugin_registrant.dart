@@ -8,9 +8,12 @@
 import 'dart:io'; // flutter_ignore: dart_io_import.
 import 'package:shared_preferences_android/shared_preferences_android.dart' as shared_preferences_android;
 import 'package:shared_preferences_foundation/shared_preferences_foundation.dart' as shared_preferences_foundation;
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:path_provider_linux/path_provider_linux.dart' as path_provider_linux;
 import 'package:shared_preferences_linux/shared_preferences_linux.dart' as shared_preferences_linux;
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:shared_preferences_foundation/shared_preferences_foundation.dart' as shared_preferences_foundation;
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:path_provider_windows/path_provider_windows.dart' as path_provider_windows;
 import 'package:shared_preferences_windows/shared_preferences_windows.dart' as shared_preferences_windows;
 
@@ -41,6 +44,15 @@ class _PluginRegistrant {
 
     } else if (Platform.isLinux) {
       try {
+        file_picker.FilePickerLinux.registerWith();
+      } catch (err) {
+        print(
+          '`file_picker` threw an error: $err. '
+          'The app may not function as expected until you remove this plugin from pubspec.yaml'
+        );
+      }
+
+      try {
         path_provider_linux.PathProviderLinux.registerWith();
       } catch (err) {
         print(
@@ -60,6 +72,15 @@ class _PluginRegistrant {
 
     } else if (Platform.isMacOS) {
       try {
+        file_picker.FilePickerMacOS.registerWith();
+      } catch (err) {
+        print(
+          '`file_picker` threw an error: $err. '
+          'The app may not function as expected until you remove this plugin from pubspec.yaml'
+        );
+      }
+
+      try {
         shared_preferences_foundation.SharedPreferencesFoundation.registerWith();
       } catch (err) {
         print(
@@ -69,6 +90,15 @@ class _PluginRegistrant {
       }
 
     } else if (Platform.isWindows) {
+      try {
+        file_picker.FilePickerWindows.registerWith();
+      } catch (err) {
+        print(
+          '`file_picker` threw an error: $err. '
+          'The app may not function as expected until you remove this plugin from pubspec.yaml'
+        );
+      }
+
       try {
         path_provider_windows.PathProviderWindows.registerWith();
       } catch (err) {

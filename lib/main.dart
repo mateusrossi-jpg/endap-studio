@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'ladder/ui/editor/ladder_editor_page.dart';
+import 'core/ui/home_page.dart';
 
 void main() {
   runApp(const EndapStudioApp());
@@ -30,7 +30,7 @@ class EndapStudioApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LadderEditorPage(),
+      home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }

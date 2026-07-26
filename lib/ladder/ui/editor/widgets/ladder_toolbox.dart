@@ -6,53 +6,53 @@ import '../../../models/node_config.dart';
 class LadderToolbox extends StatelessWidget {
   final bool isDraggingNode;
   final Function(int, int) onNodeDeleted;
+  final Function(NodeType) onNodeTapped;
 
   const LadderToolbox({
     super.key,
     required this.isDraggingNode,
     required this.onNodeDeleted,
+    required this.onNodeTapped,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFF334155), width: 1.5),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        border: const Border(
+          top: BorderSide(color: Color(0xFF334155), width: 1.5),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            offset: const Offset(0, -3),
+            blurRadius: 8,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isDraggingNode 
-                ? 'Arraste aqui para Excluir o Elemento:' 
-                : 'Paleta de Componentes (Arraste para o Rung):',
-            style: TextStyle(
-              color: isDraggingNode ? Colors.redAccent : Colors.grey, 
-              fontWeight: FontWeight.bold, 
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
           isDraggingNode
               ? _buildTrashDropZone()
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _buildDraggableToolboxItem('Contato NA', NodeType.contactNO, Icons.power_input),
-                      _buildDraggableToolboxItem('Contato NF', NodeType.contactNC, Icons.do_not_disturb_on),
-                      _buildDraggableToolboxItem('Bobina', NodeType.coil, Icons.radio_button_checked),
-                      _buildDraggableToolboxItem('Bobina SET', NodeType.coilSet, Icons.subdirectory_arrow_right),
-                      _buildDraggableToolboxItem('Bobina RST', NodeType.coilReset, Icons.settings_backup_restore),
-                      _buildDraggableToolboxItem('Timer TON', NodeType.timerTON, Icons.timer),
-                      _buildDraggableToolboxItem('Contador', NodeType.counterCTU, Icons.plus_one),
-                      _buildDraggableToolboxItem('Igual (EQU)', NodeType.compareEqual, Icons.compare_arrows),
-                      _buildDraggableToolboxItem('Maior (GRT)', NodeType.compareGreater, Icons.arrow_upward),
-                      _buildDraggableToolboxItem('Menor (LES)', NodeType.compareLess, Icons.arrow_downward),
+                      _buildDraggableToolboxItem('NO', NodeType.contactNO),
+                      _buildDraggableToolboxItem('NC', NodeType.contactNC),
+                      _buildDraggableToolboxItem('COIL', NodeType.coil),
+                      _buildDraggableToolboxItem('SET', NodeType.coilSet),
+                      _buildDraggableToolboxItem('RST', NodeType.coilReset),
+                      _buildDraggableToolboxItem('TON', NodeType.timerTON),
+                      _buildDraggableToolboxItem('TOF', NodeType.timerTOF),
+                      _buildDraggableToolboxItem('CTU', NodeType.counterCTU),
+                      _buildDraggableToolboxItem('CTD', NodeType.counterCTD),
+                      _buildDraggableToolboxItem('EQU', NodeType.compareEqual),
+                      _buildDraggableToolboxItem('GRT', NodeType.compareGreater),
+                      _buildDraggableToolboxItem('LES', NodeType.compareLess),
                     ],
                   ),
                 ),
@@ -73,26 +73,26 @@ class LadderToolbox extends StatelessWidget {
         final isHovered = candidateData.isNotEmpty;
         return Container(
           width: double.infinity,
-          height: 48,
+          height: 44,
           decoration: BoxDecoration(
-            color: isHovered ? Colors.redAccent.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.05),
+            color: isHovered ? Colors.redAccent.withValues(alpha: 0.3) : const Color(0xFF450A0A),
             border: Border.all(
-              color: isHovered ? Colors.redAccent : Colors.red.withValues(alpha: 0.5), 
-              width: isHovered ? 2.5 : 1.5,
+              color: isHovered ? Colors.redAccent : Colors.red, 
+              width: 1.5,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.delete_sweep, color: isHovered ? Colors.redAccent : Colors.red[300]),
+              Icon(Icons.delete_forever, color: isHovered ? Colors.white : Colors.redAccent, size: 22),
               const SizedBox(width: 8),
               Text(
-                isHovered ? 'Solte para Excluir!' : 'Solte o elemento aqui para remover',
+                'Solte aqui para excluir o elemento',
                 style: TextStyle(
-                  color: isHovered ? Colors.redAccent : Colors.red[300], 
+                  color: isHovered ? Colors.white : Colors.redAccent,
                   fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -102,100 +102,72 @@ class LadderToolbox extends StatelessWidget {
     );
   }
 
-  Widget _buildDraggableToolboxItem(String label, NodeType type, IconData icon) {
+  Widget _buildDraggableToolboxItem(String label, NodeType type) {
     final tempNode = LadderNode(id: 'preview', type: type, config: NodeConfig());
     
-    return Draggable<NodeType>(
-      data: type,
-      feedback: Material(
-        color: Colors.transparent,
-        child: Opacity(
-          opacity: 0.8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.3),
-              border: Border.all(color: Colors.blueAccent, width: 2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              tempNode.symbol,
-              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-            ),
+    return InkWell(
+      onTap: () => onNodeTapped(type),
+      borderRadius: BorderRadius.circular(6),
+      child: Draggable<NodeType>(
+        data: type,
+        feedback: Material(
+          color: Colors.transparent,
+          child: Opacity(
+            opacity: 0.9,
+            child: _buildToolboxButton(label, tempNode),
           ),
         ),
+        childWhenDragging: Opacity(
+          opacity: 0.3,
+          child: _buildToolboxButton(label, tempNode),
+        ),
+        child: _buildToolboxButton(label, tempNode),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.4,
-        child: _buildToolboxCard(label, icon, tempNode.symbol),
-      ),
-      child: _buildToolboxCard(label, icon, tempNode.symbol),
     );
   }
 
-  Widget _buildToolboxCard(String label, IconData icon, String symbol) {
+  Widget _buildToolboxButton(String label, LadderNode tempNode) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF1E293B).withOpacity(0.8),
-            const Color(0xFF334155).withOpacity(0.5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: const Color(0xFF475569).withOpacity(0.5),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        color: const Color(0xFF1E293B),
+        border: Border.all(color: const Color(0xFF334155), width: 1.2),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
             ),
-            child: Icon(icon, size: 18, color: Colors.blueAccent),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFF334155), width: 1),
+            ),
+            child: Text(
+              tempNode.symbol,
+              style: const TextStyle(
+                color: Colors.cyanAccent,
+                fontFamily: 'monospace',
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 2),
-              Text(
-                symbol,
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 9,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+

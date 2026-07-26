@@ -18,7 +18,7 @@ void main() {
     // Verify that the empty state is shown
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    // Verify that the empty state is shown
-    expect(find.text('Projeto Ladder'), findsOneWidget);
+    // Verify that HomePage is shown
+    expect(find.text('Endap Studio'), findsOneWidget);
   });
 }

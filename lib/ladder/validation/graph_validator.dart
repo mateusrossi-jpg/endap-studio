@@ -1,5 +1,6 @@
 import '../models/ladder_project.dart';
 import '../models/ladder_network.dart';
+import '../models/ladder_node.dart';
 import '../models/enums.dart';
 import 'graph_validation_error.dart';
 import 'graph_validation_result.dart';
@@ -27,23 +28,39 @@ class GraphValidator {
     );
   }
 
+  Set<LadderNode> _getAllNodes(List<LadderNode> nodes) {
+    final result = <LadderNode>{};
+    for (var node in nodes) {
+      result.add(node);
+      if (node.type == NodeType.parallel && node.branches != null) {
+        for (var branch in node.branches!) {
+          result.addAll(_getAllNodes(branch));
+        }
+      }
+    }
+    return result;
+  }
+
   void _validateNetwork(LadderNetwork network, List<GraphValidationError> errors) {
     if (network.nodes.isEmpty) {
       errors.add(GraphValidationError(
         type: GraphErrorType.invalidConnection,
         message: 'A rede está vazia.',
+        networkId: network.id,
       ));
       return;
     }
 
-    final hasInput = network.nodes.any((n) =>
+    final allNodes = _getAllNodes(network.nodes);
+
+    final hasInput = allNodes.any((n) =>
         n.type == NodeType.contactNO ||
         n.type == NodeType.contactNC ||
         n.type == NodeType.compareEqual ||
         n.type == NodeType.compareGreater ||
         n.type == NodeType.compareLess ||
         n.type == NodeType.parallel);
-    final hasOutput = network.nodes.any((n) =>
+    final hasOutput = allNodes.any((n) =>
         n.type == NodeType.coil ||
         n.type == NodeType.timerTON ||
         n.type == NodeType.timerTOF ||
@@ -56,16 +73,41 @@ class GraphValidator {
       errors.add(GraphValidationError(
         type: GraphErrorType.invalidConnection,
         message: 'A rede precisa de ao menos uma entrada (Contato NA/NF).',
+        networkId: network.id,
       ));
     }
     if (!hasOutput) {
       errors.add(GraphValidationError(
         type: GraphErrorType.invalidConnection,
         message: 'A rede precisa de ao menos uma saída (Bobina/Temporizador/Contador).',
+        networkId: network.id,
       ));
     }
 
-    final nodeIds = network.nodes.map((n) => n.id).toSet();
+    // Semantical Validations (Unconfigured Tags or Empty Parallels)
+    for (var node in allNodes) {
+      if (node.type == NodeType.parallel) {
+        if (node.branches == null || node.branches!.isEmpty || node.branches!.every((b) => b.isEmpty)) {
+          errors.add(GraphValidationError(
+            type: GraphErrorType.emptyParallel,
+            message: 'Bloco OR/Paralelo vazio. Adicione ramificações lógicas.',
+            networkId: network.id,
+            affectedNodeIds: [node.id],
+          ));
+        }
+      } else {
+        if (node.config.tagId == null || node.config.tagId!.trim().isEmpty) {
+          errors.add(GraphValidationError(
+            type: GraphErrorType.unconfiguredNode,
+            message: 'Nó sem variável (Tag) configurada.',
+            networkId: network.id,
+            affectedNodeIds: [node.id],
+          ));
+        }
+      }
+    }
+
+    final nodeIds = allNodes.map((n) => n.id).toSet();
     
     // 1. Deteccao de conexoes invalidas ou nos faltantes
     for (var conn in network.connections) {
@@ -78,6 +120,7 @@ class GraphValidator {
         errors.add(GraphValidationError(
           type: GraphErrorType.missingNode,
           message: 'A conexão ${conn.id} referencia um nó que não existe na rede.',
+          networkId: network.id,
           affectedConnectionIds: [conn.id],
         ));
       }
@@ -88,7 +131,7 @@ class GraphValidator {
 
     // 2. Deteccao de Ciclos (Kahn's Algorithm para Topological Sort)
     final inDegree = <String, int>{};
-    for (var n in network.nodes) {
+    for (var n in allNodes) {
       inDegree[n.id] = 0;
     }
     
@@ -118,13 +161,14 @@ class GraphValidator {
       }
     }
     
-    if (processedCount != network.nodes.length) {
+    if (processedCount != allNodes.length) {
       // Nos que ficaram com inDegree > 0 fazem parte de um ciclo
       final cycleNodes = inDegree.entries.where((e) => e.value > 0).map((e) => e.key).toList();
       
       errors.add(GraphValidationError(
         type: GraphErrorType.cycleDetected,
         message: 'Ciclo elétrico/lógico detectado. Loops fechados não são suportados na topologia atual.',
+        networkId: network.id,
         affectedNodeIds: cycleNodes,
       ));
     }

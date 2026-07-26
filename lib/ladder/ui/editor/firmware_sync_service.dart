@@ -1,16 +1,14 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import '../../models/ladder_network.dart';
-import '../../builders/firmware_compiler.dart';
+import '../../models/ladder_project.dart';
+import '../../compiler/bytecode_compiler.dart';
 
-/// Serviço responsável por sincronizar regras compiladas e configurações com o ESP32.
+/// Serviço responsável por sincronizar regras compiladas (Bytecode) com o ESP32.
 class FirmwareSyncService {
   static const String _prefGatewayIpKey = 'firmware_gateway_ip';
   static const String _defaultGatewayIp = '192.168.4.1';
 
-  /// Recupera o último IP do Gateway armazenado
   static Future<String> getSavedGatewayIp() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -21,7 +19,6 @@ class FirmwareSyncService {
     }
   }
 
-  /// Salva o IP do Gateway nas configurações
   static Future<void> saveGatewayIp(String ip) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -31,50 +28,34 @@ class FirmwareSyncService {
     }
   }
 
-  /// Compila as redes lógicas do Ladder e envia o payload via HTTP POST para o ESP32
-  Future<bool> syncRules(String gatewayIp, List<LadderNetwork> networks) async {
+  /// Compila o projeto inteiro em Bytecode binário e envia via POST para o ESP32
+  Future<bool> syncRules(String gatewayIp, LadderProject project) async {
     try {
-      if (networks.isEmpty) {
-        debugPrint('Nenhuma rede para sincronizar.');
+      if (project.networks.isEmpty) {
+        debugPrint('Nenhum diagrama para sincronizar.');
         return false;
       }
 
-      // 1. Itera sobre a lista de redes e compila cada uma para o formato de string do firmware
-      final List<Map<String, String>> rulesPayload = [];
-      for (var network in networks) {
-        try {
-          final compiledLogic = network.compileToFirmwareRule();
-          rulesPayload.add({
-            'id': network.id,
-            'logic': compiledLogic,
-          });
-        } catch (e) {
-          debugPrint('Falha ao compilar rede ${network.id}: $e');
-          // Ignora ou interrompe com erro conforme a robustez do fluxo
-          rethrow;
-        }
-      }
+      // 1. Gera o Bytecode Binário usando o Compiler da Fase 4
+      final compiler = BytecodeCompiler();
+      final bytecode = compiler.compile(project);
+      
+      final url = Uri.parse('http://$gatewayIp/api/automation/ladder');
+      debugPrint('Enviando payload binário (${bytecode.length} bytes) para $url');
 
-      // 2. Monta o payload final estruturado
-      final Map<String, dynamic> payload = {
-        'version': '1.0',
-        'rules': rulesPayload,
-      };
-
-      final body = jsonEncode(payload);
-      final url = Uri.parse('http://$gatewayIp/api/automation/rules/save');
-
-      debugPrint('Enviando payload para o ESP32 ($url): $body');
-
-      // 3. Executa o disparo HTTP POST com timeout de segurança
+      // 2. Envia o Binário Puro (Octet-stream)
+      // OBS: A Header de 'Authorization' pode ser incluída aqui caso a segurança exija Token.
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
-        body: body,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          // 'Authorization': 'Bearer MEU_TOKEN' // <-- Implementar segurança JWT/Token futuro
+        },
+        body: bytecode,
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
-        debugPrint('Lógica sincronizada com sucesso no firmware.');
+        debugPrint('Lógica binária sincronizada com sucesso no firmware.');
         return true;
       } else {
         debugPrint('ESP32 rejeitou as regras: código ${response.statusCode}, corpo: ${response.body}');

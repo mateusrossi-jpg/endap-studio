@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../ladder_autosave.dart';
+import '../../services/undo_redo_manager.dart';
 import '../../models/ladder_project.dart';
 import '../../models/ladder_network.dart';
 import '../../models/ladder_node.dart';
@@ -11,19 +12,25 @@ import '../../models/tag_value.dart';
 import '../../models/enums.dart';
 import '../../validation/graph_validator.dart';
 import 'file_helper.dart';
+import 'firmware_sync_service.dart';
+
 import '../../runtime/ladder_runtime.dart';
 import 'widgets/variables_panel.dart';
+import 'widgets/ladder_background.dart';
 import 'widgets/rung_list.dart';
 import 'widgets/ladder_toolbox.dart';
 
 class LadderEditorPage extends StatefulWidget {
-  const LadderEditorPage({super.key});
+  final LadderProject initialProject;
+
+  const LadderEditorPage({super.key, required this.initialProject});
 
   @override
   State<LadderEditorPage> createState() => _LadderEditorPageState();
 }
 
 class _LadderEditorPageState extends State<LadderEditorPage> {
+  final UndoRedoManager _undoManager = UndoRedoManager();
   // Selected node for visual highlight
   int? _selectedRungIndex;
   int? _selectedNodeIndex;
@@ -46,11 +53,19 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   @override
   void initState() {
     super.initState();
-    _project = LadderProject(
-      id: 'proj_${DateTime.now().millisecondsSinceEpoch}',
-      name: 'Default Project',
-    );
-    _loadProject();
+    _project = widget.initialProject;
+    
+    // Populate initial simulation inputs from project tags
+    for (var tag in _project.tags.values) {
+      if (tag.type == TagType.bool) {
+        _simulationInputs[tag.id] = tag.initialValue?.boolValue ?? false;
+      }
+    }
+    
+    _initialized = true;
+    _runPassiveValidation();
+    _updateRuntimeProject();
+    _startTimedSimulation();
   }
 
   @override
@@ -59,36 +74,9 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     super.dispose();
   }
 
-  Future<void> _loadProject() async {
-    final loaded = await loadCurrentLadder();
-    if (loaded != null) {
-      if (mounted) {
-        setState(() {
-          _project = loaded;
-          _initialized = true;
-          // Populate initial simulation inputs from project tags
-          for (var tag in _project.tags.values) {
-            if (tag.type == TagType.bool) {
-              _simulationInputs[tag.id] = tag.initialValue?.boolValue ?? false;
-            }
-          }
-          _runPassiveValidation();
-          _updateRuntimeProject();
-          _startTimedSimulation();
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _initialized = true;
-          _updateRuntimeProject();
-          _startTimedSimulation();
-        });
-      }
-    }
-  }
 
   Future<void> _saveProject() async {
+    _undoManager.saveState(_project);
     await saveCurrentLadder(_project);
     _runPassiveValidation();
     _updateRuntimeProject();
@@ -668,15 +656,93 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Endap Studio Editor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        elevation: 4,
+        leading: IconButton(
+          icon: Icon(Icons.menu, color: Colors.blue[800]),
+          onPressed: () {
+            Scaffold.maybeOf(context)?.openDrawer();
+          },
+        ),
+        backgroundColor: const Color(0xFFF8F9FA),
+        title: const Text('Endap Studio Editor', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+        elevation: 1,
         actions: [
           IconButton(
-            icon: const Icon(Icons.download, color: Colors.blueAccent),
-            tooltip: 'Importar JSON',
+            icon: Icon(Icons.add_box, color: Colors.blue[800]),
+            tooltip: 'Novo Projeto',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: Colors.white,
+                  title: const Text('Novo Projeto', style: TextStyle(color: Colors.black87)),
+                  content: const Text('Deseja criar um novo projeto? O progresso não salvo será perdido.', style: TextStyle(color: Colors.black54)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
+                      onPressed: () {
+                        setState(() {
+                          _project = LadderProject(
+                            id: 'proj_${DateTime.now().millisecondsSinceEpoch}',
+                            name: 'Novo Projeto',
+                          );
+                          _simulationInputs.clear();
+                          _networkValidationErrors.clear();
+                          _undoManager.saveState(_project);
+                          saveCurrentLadder(_project);
+                          _runPassiveValidation();
+                          _updateRuntimeProject();
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Criar'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.undo, color: _undoManager.canUndo ? Colors.black87 : Colors.grey[400]),
+            tooltip: 'Desfazer (Ctrl+Z)',
+            onPressed: _undoManager.canUndo ? () {
+              final previous = _undoManager.undo(_project);
+              if (previous != null) {
+                setState(() {
+                  _project = previous;
+                  _runPassiveValidation();
+                  _updateRuntimeProject();
+                  saveCurrentLadder(_project);
+                });
+              }
+            } : null,
+          ),
+          IconButton(
+            icon: Icon(Icons.redo, color: _undoManager.canRedo ? Colors.black87 : Colors.grey[400]),
+            tooltip: 'Refazer (Ctrl+Y)',
+            onPressed: _undoManager.canRedo ? () {
+              final next = _undoManager.redo(_project);
+              if (next != null) {
+                setState(() {
+                  _project = next;
+                  _runPassiveValidation();
+                  _updateRuntimeProject();
+                  saveCurrentLadder(_project);
+                });
+              }
+            } : null,
+          ),
+          const SizedBox(width: 8),
+          const VerticalDivider(color: Colors.grey, width: 1, endIndent: 12, indent: 12),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.folder_open, color: Colors.blueAccent),
+            tooltip: 'Abrir Projeto',
             onPressed: () async {
               final imported = await importProject();
               if (imported != null) {
@@ -700,8 +766,8 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.upload, color: Colors.greenAccent),
-            tooltip: 'Exportar JSON',
+            icon: const Icon(Icons.save, color: Colors.greenAccent),
+            tooltip: 'Salvar Projeto',
             onPressed: () async {
               await exportProject(_project);
               if (mounted) {
@@ -713,32 +779,53 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
             },
           ),
           const SizedBox(width: 8),
+          const VerticalDivider(color: Colors.grey, width: 1, endIndent: 12, indent: 12),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.cyanAccent.withOpacity(0.2),
+              foregroundColor: Colors.cyanAccent,
+              side: const BorderSide(color: Colors.cyanAccent),
+            ),
+            icon: const Icon(Icons.cloud_upload),
+            label: const Text('Deploy Firmware'),
+            onPressed: () async {
+              // 1. Validação
+              final validation = GraphValidator().validate(_project);
+              if (!validation.isValid) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Erro: Não é possível fazer deploy com erros no projeto!'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              // 2. Deploy
+              final gatewayIp = await FirmwareSyncService.getSavedGatewayIp();
+              final success = await FirmwareSyncService().syncRules(gatewayIp, _project);
+              
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Deploy concluído! Bytecode injetado no CLP.'), backgroundColor: Colors.green),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Falha ao comunicar com o CLP. Verifique a rede.'), backgroundColor: Colors.redAccent),
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 16),
         ],
       ),
       body: Column(
         children: [
-          _buildComponentToolboxWrapper(),
           Expanded(
-            child: _project.networks.isEmpty ? _buildEmptyState() : _buildRungListWrapper(),
+            child: _project.networks.isEmpty ? LadderBackground(child: _buildEmptyState()) : _buildRungListWrapper(),
           ),
+          _buildComponentToolboxWrapper(),
           _buildVariablesPanelWrapper(),
         ],
       ),
-      floatingActionButton: _project.networks.isNotEmpty
-          ? FloatingActionButton.extended(
-              backgroundColor: Colors.blueAccent,
-              onPressed: () {
-                setState(() {
-                  _project.networks.add(LadderNetwork(
-                    id: 'net_${DateTime.now().microsecondsSinceEpoch}',
-                  ));
-                  _saveProject();
-                });
-              },
-              label: const Text('Adicionar Rung', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
-              icon: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
     );
   }
 
@@ -782,60 +869,53 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
-        child: Card(
-          color: const Color(0xFF1E293B),
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.account_tree_outlined, size: 72, color: Colors.blueAccent),
-                const SizedBox(height: 24),
-                const Text(
-                  'Projeto Ladder',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Seu primeiro programa',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[400]),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'Crie o primeiro degrau da lógica para iniciar a simulação e desenvolvimento.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: Colors.grey),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _project.networks.add(LadderNetwork(
-                          id: 'net_${DateTime.now().microsecondsSinceEpoch}',
-                        ));
-                        _saveProject();
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Adicionar Rung',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.account_tree_outlined, size: 72, color: Colors.blueAccent),
+            const SizedBox(height: 24),
+            const Text(
+              'Projeto Ladder',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Seu primeiro programa',
+              style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Crie o primeiro degrau da lógica para iniciar a simulação e desenvolvimento.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 300,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _project.networks.add(LadderNetwork(
+                      id: 'net_${DateTime.now().microsecondsSinceEpoch}',
+                    ));
+                    _saveProject();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  side: const BorderSide(color: Colors.blueAccent, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(0), // Sharp industrial button
                   ),
                 ),
-              ],
+                child: const Text(
+                  'Adicionar Rung',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -874,6 +954,27 @@ class _LadderEditorPageState extends State<LadderEditorPage> {
   Widget _buildComponentToolboxWrapper() {
     return LadderToolbox(
       isDraggingNode: _isDraggingNode,
+      onNodeTapped: (nodeType) {
+        // Tapping a node in the toolbox selects it for insertion
+        // For the MVP, we can insert it at the end of the first rung, 
+        // or just let the user know they should drag it.
+        // Or better yet, we can have an "activeRung" state.
+        if (_project.networks.isNotEmpty) {
+          setState(() {
+            final newNode = LadderNode(
+              id: 'node_${DateTime.now().microsecondsSinceEpoch}',
+              type: nodeType,
+              config: NodeConfig(),
+            );
+            _project.networks.first.addNode(newNode);
+            _saveProject();
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Adicione um Rung primeiro!')),
+          );
+        }
+      },
       onNodeDeleted: (srcRung, srcNode) {
         setState(() {
           _project.networks[srcRung].removeNodeAt(srcNode);

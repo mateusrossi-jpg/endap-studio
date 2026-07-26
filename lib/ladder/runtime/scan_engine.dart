@@ -4,19 +4,35 @@ import 'evaluator_registry.dart';
 import 'node_runtime_state.dart';
 import 'tag_state_store.dart';
 
+import '../models/enums.dart';
+
 class ScanEngine {
   final EvaluatorRegistry registry;
 
   ScanEngine(this.registry);
 
+  Set<LadderNode> _getAllNodes(List<LadderNode> nodes) {
+    final result = <LadderNode>{};
+    for (var node in nodes) {
+      result.add(node);
+      if (node.type == NodeType.parallel && node.branches != null) {
+        for (var branch in node.branches!) {
+          result.addAll(_getAllNodes(branch));
+        }
+      }
+    }
+    return result;
+  }
+
   /// Constroi o plano de execucao resolvendo a ordem topologica.
   List<LadderNode> buildExecutionPlan(LadderNetwork network) {
+    final allNodes = _getAllNodes(network.nodes);
     final List<LadderNode> plan = [];
     final Map<String, int> inDegree = {};
-    final Map<String, LadderNode> nodeMap = {for (var n in network.nodes) n.id: n};
+    final Map<String, LadderNode> nodeMap = {for (var n in allNodes) n.id: n};
 
     // Inicializa graus de entrada
-    for (var node in network.nodes) {
+    for (var node in allNodes) {
       inDegree[node.id] = 0;
     }
 

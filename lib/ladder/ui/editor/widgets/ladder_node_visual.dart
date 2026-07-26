@@ -28,10 +28,10 @@ class LadderNodeVisual extends StatelessWidget {
     final color = node.isEnergized ? Colors.greenAccent : Colors.grey[400]!;
     final bgColor = node.isEnergized
         ? Colors.greenAccent.withValues(alpha: 0.08)
-        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.08) : const Color(0xFF1E293B));
+        : (isSelected ? Colors.yellowAccent.withValues(alpha: 0.08) : const Color(0xFFFFFFFF));
     final borderColor = isSelected
         ? Colors.yellowAccent
-        : (node.isEnergized ? Colors.greenAccent : Colors.grey[700]!);
+        : (node.isEnergized ? Colors.greenAccent : Colors.grey[300]!);
 
     final tagText = node.config.tagId ?? '-';
     final hasTag = node.config.tagId != null && node.config.tagId!.isNotEmpty;
@@ -58,8 +58,15 @@ class LadderNodeVisual extends StatelessWidget {
               Positioned(
                 top: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: node.isEnergized ? Colors.greenAccent : const Color(0xFF334155),
+                      width: 1,
+                    ),
+                  ),
                   child: Text(
                     tagText,
                     style: TextStyle(
@@ -103,8 +110,15 @@ class LadderNodeVisual extends StatelessWidget {
               Positioned(
                 top: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: node.isEnergized ? Colors.greenAccent : const Color(0xFF334155),
+                      width: 1,
+                    ),
+                  ),
                   child: Text(
                     tagText,
                     style: TextStyle(
@@ -143,12 +157,16 @@ class LadderNodeVisual extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: color, width: 2),
-                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.transparent,
+                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : const Color(0xFF0F172A),
                   ),
                   child: Center(
                     child: Text(
                       label,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: node.isEnergized ? Colors.greenAccent : Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -157,8 +175,15 @@ class LadderNodeVisual extends StatelessWidget {
               Positioned(
                 top: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: node.isEnergized ? Colors.greenAccent : const Color(0xFF334155),
+                      width: 1,
+                    ),
+                  ),
                   child: Text(
                     tagText,
                     style: TextStyle(
@@ -176,55 +201,90 @@ class LadderNodeVisual extends StatelessWidget {
         break;
 
       case NodeType.timerTON:
+      case NodeType.timerTOF:
       case NodeType.counterCTU:
-        final prefix = node.type == NodeType.timerTON ? 'TON' : 'CTU';
+      case NodeType.counterCTD:
+        final String prefix;
+        if (node.type == NodeType.timerTON) prefix = 'TON';
+        else if (node.type == NodeType.timerTOF) prefix = 'TOF';
+        else if (node.type == NodeType.counterCTU) prefix = 'CTU';
+        else prefix = 'CTD';
+
         final preset = node.config.presetValue?.intValue?.toString() ?? '0';
-        final isTimer = node.type == NodeType.timerTON;
+        final isTimer = node.type == NodeType.timerTON || node.type == NodeType.timerTOF;
         final runState = runtime.nodeStates[node.id];
         final accValue = isTimer 
             ? (runState?.accumulatedTimeMs ?? 0) 
             : (runState?.counterValue ?? 0);
             
-        symbolWidget = Container(
-          width: 96,
-          height: 64,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(color: borderColor, width: 2),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              if (node.isEnergized)
-                BoxShadow(
-                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
-                  blurRadius: glowRadius,
-                  spreadRadius: glowRadius / 2,
-                ),
-              if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '$prefix: $tagText',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
+        symbolWidget = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Left connection line
+            Container(width: 8, height: 2, color: color),
+            Container(
+              width: 104,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                border: Border.all(color: borderColor, width: 2),
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  if (node.isEnergized)
+                    BoxShadow(
+                      color: Colors.greenAccent.withValues(alpha: glowOpacity),
+                      blurRadius: glowRadius,
+                      spreadRadius: glowRadius / 2,
+                    ),
+                  if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                'ACC: $accValue${isTimer ? 'ms' : ''}',
-                style: const TextStyle(fontSize: 8, color: Colors.greenAccent, fontWeight: FontWeight.bold),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      '$prefix: $tagText',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: node.isEnergized ? Colors.greenAccent : Colors.white,
+                        fontFamily: 'monospace',
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('ACC:', style: TextStyle(fontSize: 9, color: Colors.grey, fontFamily: 'monospace')),
+                        Text('$accValue', style: const TextStyle(fontSize: 10, color: Colors.greenAccent, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('PRE:', style: TextStyle(fontSize: 9, color: Colors.grey, fontFamily: 'monospace')),
+                        Text('$preset', style: const TextStyle(fontSize: 10, color: Colors.white, fontFamily: 'monospace')),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                ],
               ),
-              Text(
-                'PRE: $preset${isTimer ? 'ms' : ''}',
-                style: const TextStyle(fontSize: 8, color: Colors.grey),
-              ),
-            ],
-          ),
+            ),
+            // Right connection line
+            Container(width: 8, height: 2, color: color),
+          ],
         );
         break;
 
@@ -234,9 +294,6 @@ class LadderNodeVisual extends StatelessWidget {
         final prefix = node.type == NodeType.compareEqual
             ? 'EQU'
             : (node.type == NodeType.compareGreater ? 'GRT' : 'LES');
-        final operator = node.type == NodeType.compareEqual
-            ? '='
-            : (node.type == NodeType.compareGreater ? '>' : '<');
         final tagA = node.config.tagId ?? 'A';
         final valB = node.config.presetValue;
         String tagBText = '';
@@ -253,84 +310,72 @@ class LadderNodeVisual extends StatelessWidget {
         } else {
           tagBText = 'B';
         }
-        
-        final storeValA = runtime.tagStore.getValue(tagA);
-        final storeValB = valB != null && valB.stringValue != null ? runtime.tagStore.getValue(valB.stringValue!) : null;
-        
-        String displayValA = '';
-        if (storeValA != null) {
-          displayValA = storeValA.boolValue?.toString() ?? storeValA.intValue?.toString() ?? storeValA.realValue?.toString() ?? storeValA.stringValue ?? '';
-        }
-        
-        String displayValB = '';
-        if (storeValB != null) {
-          displayValB = storeValB.boolValue?.toString() ?? storeValB.intValue?.toString() ?? storeValB.realValue?.toString() ?? storeValB.stringValue ?? '';
-        } else if (valB != null && valB.stringValue == null) {
-          displayValB = tagBText;
-        }
 
-        symbolWidget = Container(
-          width: 96,
-          height: 64,
-          decoration: BoxDecoration(
-            color: bgColor,
-            border: Border.all(color: borderColor, width: 2),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              if (node.isEnergized)
-                BoxShadow(
-                  color: Colors.greenAccent.withValues(alpha: glowOpacity),
-                  blurRadius: glowRadius,
-                  spreadRadius: glowRadius / 2,
-                ),
-              if (isSelected)
-                BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                prefix,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: node.isEnergized ? Colors.greenAccent : Colors.white,
-                ),
+        symbolWidget = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 8, height: 2, color: color),
+            Container(
+              width: 104,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                border: Border.all(color: borderColor, width: 2),
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  if (node.isEnergized)
+                    BoxShadow(
+                      color: Colors.greenAccent.withValues(alpha: glowOpacity),
+                      blurRadius: glowRadius,
+                      spreadRadius: glowRadius / 2,
+                    ),
+                  if (isSelected) BoxShadow(color: Colors.yellowAccent.withValues(alpha: 0.3), blurRadius: 6),
+                ],
               ),
-              const SizedBox(height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  tagA,
-                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
-                  textAlign: TextAlign.center,
-                ),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    color: node.isEnergized ? Colors.greenAccent.withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      prefix,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: node.isEnergized ? Colors.greenAccent : Colors.white,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('A:', style: TextStyle(fontSize: 9, color: Colors.grey, fontFamily: 'monospace')),
+                        Text(tagA, style: const TextStyle(fontSize: 9, color: Colors.cyanAccent, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('B:', style: TextStyle(fontSize: 9, color: Colors.grey, fontFamily: 'monospace')),
+                        Text(tagBText, style: const TextStyle(fontSize: 9, color: Colors.white, fontFamily: 'monospace')),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                ],
               ),
-              if (displayValA.isNotEmpty)
-                Text(
-                  '($displayValA)',
-                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
-                ),
-              Text(
-                operator,
-                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  tagBText,
-                  style: TextStyle(fontSize: 8, color: Colors.grey[300], overflow: TextOverflow.ellipsis),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              if (displayValB.isNotEmpty && displayValB != tagBText)
-                Text(
-                  '($displayValB)',
-                  style: const TextStyle(fontSize: 7, color: Colors.greenAccent, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-          ),
+            ),
+            Container(width: 8, height: 2, color: color),
+          ],
         );
         break;
       default:

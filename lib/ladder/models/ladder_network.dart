@@ -1,5 +1,6 @@
 import 'ladder_node.dart';
 import 'ladder_connection.dart';
+import 'enums.dart';
 
 class LadderNetwork {
   final String id;
@@ -78,14 +79,70 @@ class LadderNetwork {
 
   void rebuildConnections() {
     connections.clear();
-    for (int i = 0; i < nodes.length - 1; i++) {
+    _buildListConnections(nodes, null, null);
+  }
+
+  void _buildListConnections(List<LadderNode> list, String? previousId, String? nextId) {
+    if (list.isEmpty) {
+      // Se a lista esta vazia mas temos previous e next, conectamos direto
+      if (previousId != null && nextId != null) {
+        connections.add(LadderConnection(
+          id: 'conn_${id}_${DateTime.now().microsecondsSinceEpoch}_empty',
+          fromNodeId: previousId,
+          fromPort: 'out',
+          toNodeId: nextId,
+          toPort: 'in',
+        ));
+      }
+      return;
+    }
+    
+    // Conecta o anterior ao primeiro
+    if (previousId != null) {
       connections.add(LadderConnection(
-        id: 'conn_${id}_${i}_${DateTime.now().microsecondsSinceEpoch}',
-        fromNodeId: nodes[i].id,
+        id: 'conn_${id}_${DateTime.now().microsecondsSinceEpoch}_in',
+        fromNodeId: previousId,
         fromPort: 'out',
-        toNodeId: nodes[i + 1].id,
+        toNodeId: list.first.id,
         toPort: 'in',
       ));
+    }
+
+    for (int i = 0; i < list.length; i++) {
+      final node = list[i];
+      final isLast = (i == list.length - 1);
+      final currentNextId = isLast ? nextId : list[i + 1].id;
+
+      if (node.type == NodeType.parallel) {
+        // Parallel node just passes power. Connect its out to its next.
+        if (currentNextId != null) {
+          connections.add(LadderConnection(
+            id: 'conn_${id}_${DateTime.now().microsecondsSinceEpoch}_$i',
+            fromNodeId: node.id,
+            fromPort: 'out',
+            toNodeId: currentNextId,
+            toPort: 'in',
+          ));
+        }
+        
+        // Connect its inPower to the first nodes of all its branches
+        // and connect the last nodes of its branches to the currentNextId
+        if (node.branches != null) {
+          for (var branch in node.branches!) {
+            _buildListConnections(branch, node.id, currentNextId);
+          }
+        }
+      } else {
+        if (currentNextId != null) {
+          connections.add(LadderConnection(
+            id: 'conn_${id}_${DateTime.now().microsecondsSinceEpoch}_$i',
+            fromNodeId: node.id,
+            fromPort: 'out',
+            toNodeId: currentNextId,
+            toPort: 'in',
+          ));
+        }
+      }
     }
   }
 
