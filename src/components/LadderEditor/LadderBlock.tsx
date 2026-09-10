@@ -1,17 +1,21 @@
+import { memo } from 'react';
 import { EndapLadderBlock } from '../../types/endap';
 import { blockClass, blockSymbol, counterProgress, timerProgress } from './utils';
 
 export interface LadderBlockProps {
   block: EndapLadderBlock;
   isSelected: boolean;
-  onClick: () => void;
 }
 
-export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
+// ⚡ Bolt: Wrapped small block components in React.memo with custom equality check.
+// 🎯 Why: `evaluateRung` generates new block objects every 200ms scan cycle.
+// 📊 Impact: Prevents massive re-render tree thrashing for identical blocks, saving significant CPU per cycle.
+// Event delegation is used in LadderRung to handle clicks, avoiding stale closures.
+export const LadderBlock = memo(function LadderBlock({ block, isSelected }: LadderBlockProps) {
   return (
     <button
       className={blockClass(block, isSelected)}
-      onClick={onClick}
+      data-block-id={block.id}
       type="button"
     >
       <span className="block-symbol">{blockSymbol(block)}</span>
@@ -34,4 +38,16 @@ export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
       )}
     </button>
   );
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.block.id === nextProps.block.id &&
+    prevProps.block.active === nextProps.block.active &&
+    prevProps.block.elapsedMs === nextProps.block.elapsedMs &&
+    prevProps.block.accumulatedCount === nextProps.block.accumulatedCount &&
+    prevProps.block.presetMs === nextProps.block.presetMs &&
+    prevProps.block.presetCount === nextProps.block.presetCount &&
+    prevProps.block.kind === nextProps.block.kind &&
+    prevProps.block.label === nextProps.block.label
+  );
+});

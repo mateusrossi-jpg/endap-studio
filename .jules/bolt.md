@@ -1,0 +1,3 @@
+## 2024-09-10 - Expensive React Re-renders from Ladder Simulation
+**Learning:** The application simulates a PLC ladder execution by running `evaluateRung` every 200ms. This returns newly allocated block objects (even if their states remain exactly the same), leading to large cascading re-renders across all `LadderBlock`s in the canvas.
+**Action:** Always wrap small visual components (like `LadderBlock`) rendered in high-frequency loops with `React.memo`, especially if their props (like objects) are re-instantiated frequently but the primitive values remain functionally identical. A custom `areEqual` function is often required when you can't guarantee referential equality.
