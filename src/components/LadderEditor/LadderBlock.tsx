@@ -1,3 +1,4 @@
+import React from 'react';
 import { EndapLadderBlock } from '../../types/endap';
 import { blockClass, blockSymbol, counterProgress, timerProgress } from './utils';
 
@@ -7,7 +8,7 @@ export interface LadderBlockProps {
   onClick: () => void;
 }
 
-export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
+export const LadderBlock = React.memo(function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
   return (
     <button
       className={blockClass(block, isSelected)}
@@ -34,4 +35,4 @@ export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
       )}
     </button>
   );
-}
+});

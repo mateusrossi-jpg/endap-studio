@@ -1,3 +1,4 @@
+import React from 'react';
 import { EndapLadderRung } from '../../types/endap';
 import { branchIsEnergized, getAllRungBlocks, rungIsEnergized } from '../../services/ladderRuntime';
 import { LadderBlock } from './LadderBlock';
@@ -11,7 +12,13 @@ export interface LadderRungProps {
   onSelectBlock: (rungId: string, blockId: string) => void;
 }
 
-export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
+import { useCallback } from 'react';
+
+export const LadderRung = React.memo(function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
+  const handleSelectBlock = useCallback((blockId: string) => {
+    onSelectBlock(rung.id, blockId);
+  }, [onSelectBlock, rung.id]);
+
   return (
     <article className={`rung-card ${selectedRungId === rung.id ? 'is-rung-selected' : ''}`}>
       <button className="rung-meta" onClick={() => onSelectRung(rung.id)} type="button">
@@ -28,11 +35,11 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
 
         <div className="block-row">
           {rung.blocks.map((block) => (
-            <LadderBlock
+            <LadderBlockWrapper
               key={block.id}
               block={block}
               isSelected={selectedBlockId === block.id}
-              onClick={() => onSelectBlock(rung.id, block.id)}
+              onSelect={handleSelectBlock}
             />
           ))}
         </div>
@@ -45,11 +52,11 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
                 <div className="branch-wire" />
                 <div className="branch-blocks">
                   {branch.blocks.map((block) => (
-                    <LadderBlock
+                    <LadderBlockWrapper
                       key={block.id}
                       block={block}
                       isSelected={selectedBlockId === block.id}
-                      onClick={() => onSelectBlock(rung.id, block.id)}
+                      onSelect={handleSelectBlock}
                     />
                   ))}
                 </div>
@@ -60,4 +67,27 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
       </div>
     </article>
   );
-}
+});
+
+// Create a wrapper component to extract the block ID cleanly without an inline arrow function in the map
+const LadderBlockWrapper = React.memo(function LadderBlockWrapper({
+  block,
+  isSelected,
+  onSelect
+}: {
+  block: any,
+  isSelected: boolean,
+  onSelect: (blockId: string) => void
+}) {
+  const handleClick = useCallback(() => {
+    onSelect(block.id);
+  }, [onSelect, block.id]);
+
+  return (
+    <LadderBlock
+      block={block}
+      isSelected={isSelected}
+      onClick={handleClick}
+    />
+  );
+});
