@@ -1,0 +1,1 @@
+ /home/mateus/dev/github/endap-studio/.dart_tool/flutter_build/047d9d8d847f6e04c8968bf5016b73c9/native_assets.json: 

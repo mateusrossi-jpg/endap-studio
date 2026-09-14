@@ -1,0 +1,17 @@
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/endap_studio
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/icudtl.dat
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/lib/libflutter_linux_gtk.so
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/lib/native_assets.json
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/NativeAssetsManifest.json
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/version.json
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/AssetManifest.bin
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/assets/fonts/Roboto-Regular.ttf
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/assets/fonts/Roboto-Medium.ttf
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/assets/fonts/Roboto-Bold.ttf
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/packages/cupertino_icons/assets/CupertinoIcons.ttf
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/FontManifest.json
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/NOTICES.Z
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/fonts/MaterialIcons-Regular.otf
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/shaders/stretch_effect.frag
+/home/mateus/dev/github/endap-studio/build/linux/x64/debug/bundle/data/flutter_assets/shaders/ink_sparkle.frag
