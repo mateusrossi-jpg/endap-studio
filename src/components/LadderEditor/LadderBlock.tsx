@@ -1,17 +1,20 @@
+import { memo } from 'react';
 import { EndapLadderBlock } from '../../types/endap';
 import { blockClass, blockSymbol, counterProgress, timerProgress } from './utils';
 
 export interface LadderBlockProps {
   block: EndapLadderBlock;
   isSelected: boolean;
-  onClick: () => void;
+  rungId: string;
+  onSelect: (rungId: string, blockId: string) => void;
 }
 
-export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
+// Optimization: Memoize LadderBlock to prevent cascading re-renders during cyclical simulation loop.
+export const LadderBlock = memo(function LadderBlock({ block, isSelected, rungId, onSelect }: LadderBlockProps) {
   return (
     <button
       className={blockClass(block, isSelected)}
-      onClick={onClick}
+      onClick={() => onSelect(rungId, block.id)}
       type="button"
     >
       <span className="block-symbol">{blockSymbol(block)}</span>
@@ -34,4 +37,4 @@ export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
       )}
     </button>
   );
-}
+});

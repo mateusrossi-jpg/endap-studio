@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { EndapLadderRung } from '../../types/endap';
 import { branchIsEnergized, getAllRungBlocks, rungIsEnergized } from '../../services/ladderRuntime';
 import { LadderBlock } from './LadderBlock';
@@ -11,7 +12,9 @@ export interface LadderRungProps {
   onSelectBlock: (rungId: string, blockId: string) => void;
 }
 
-export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
+// Optimization: Memoize LadderRung to prevent cascading re-renders during cyclical simulation loop (runScanSimulation).
+// Referential equality on the 'rung' prop is maintained by the simulation logic for unmodified paths.
+export const LadderRung = memo(function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
   return (
     <article className={`rung-card ${selectedRungId === rung.id ? 'is-rung-selected' : ''}`}>
       <button className="rung-meta" onClick={() => onSelectRung(rung.id)} type="button">
@@ -32,7 +35,8 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
               key={block.id}
               block={block}
               isSelected={selectedBlockId === block.id}
-              onClick={() => onSelectBlock(rung.id, block.id)}
+              rungId={rung.id}
+              onSelect={onSelectBlock}
             />
           ))}
         </div>
@@ -49,7 +53,8 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
                       key={block.id}
                       block={block}
                       isSelected={selectedBlockId === block.id}
-                      onClick={() => onSelectBlock(rung.id, block.id)}
+                      rungId={rung.id}
+                      onSelect={onSelectBlock}
                     />
                   ))}
                 </div>
@@ -60,4 +65,4 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
       </div>
     </article>
   );
-}
+});

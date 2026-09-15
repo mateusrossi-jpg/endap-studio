@@ -1,0 +1,3 @@
+## 2024-11-20 - [Avoid cascading React re-renders in cyclical simulations]
+**Learning:** The application's runtime mode relies on a cyclical simulation loop (`runScanSimulation`) that runs every 200ms. I must be careful not to introduce performance issues. State evaluation functions (like in `ladderRuntime.ts`) must preserve referential equality when returning objects to prevent massive cascading React re-renders. A good way to prevent re-renders when passing objects/callbacks as props is to memoize components. `React.memo` will prevent re-rendering when props do not change.
+**Action:** Use `React.memo` in `LadderRung` and `LadderBlock`.
