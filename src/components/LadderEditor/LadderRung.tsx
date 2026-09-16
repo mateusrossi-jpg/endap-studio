@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { EndapLadderRung } from '../../types/endap';
 import { branchIsEnergized, getAllRungBlocks, rungIsEnergized } from '../../services/ladderRuntime';
 import { LadderBlock } from './LadderBlock';
@@ -11,7 +12,7 @@ export interface LadderRungProps {
   onSelectBlock: (rungId: string, blockId: string) => void;
 }
 
-export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
+export const LadderRung = memo(function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSelectRung, onSelectBlock }: LadderRungProps) {
   return (
     <article className={`rung-card ${selectedRungId === rung.id ? 'is-rung-selected' : ''}`}>
       <button className="rung-meta" onClick={() => onSelectRung(rung.id)} type="button">
@@ -31,8 +32,9 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
             <LadderBlock
               key={block.id}
               block={block}
+              rungId={rung.id}
               isSelected={selectedBlockId === block.id}
-              onClick={() => onSelectBlock(rung.id, block.id)}
+              onSelectBlock={onSelectBlock}
             />
           ))}
         </div>
@@ -48,8 +50,9 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
                     <LadderBlock
                       key={block.id}
                       block={block}
+                      rungId={rung.id}
                       isSelected={selectedBlockId === block.id}
-                      onClick={() => onSelectBlock(rung.id, block.id)}
+                      onSelectBlock={onSelectBlock}
                     />
                   ))}
                 </div>
@@ -60,4 +63,4 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
       </div>
     </article>
   );
-}
+});
