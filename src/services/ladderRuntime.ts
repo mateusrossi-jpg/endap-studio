@@ -79,12 +79,14 @@ export function evaluatePath(
     if (block.kind === 'memory-contact-no') {
       const active = readForcedValue(address, nextMemory, forceState);
       power = power && active;
+      if (block.active === active) return block;
       return { ...block, active };
     }
 
     if (block.kind === 'memory-contact-nc') {
       const active = !readForcedValue(address, nextMemory, forceState);
       power = power && active;
+      if (block.active === active) return block;
       return { ...block, active };
     }
 
@@ -93,6 +95,7 @@ export function evaluatePath(
       const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
       const active = elapsedMs >= presetMs;
       power = power && active;
+      if (block.elapsedMs === elapsedMs && block.active === active) return block;
       return { ...block, elapsedMs, active };
     }
 
@@ -101,6 +104,7 @@ export function evaluatePath(
       const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
       const active = power || elapsedMs < presetMs;
       power = active;
+      if (block.elapsedMs === elapsedMs && block.active === active) return block;
       return { ...block, elapsedMs, active };
     }
 
@@ -116,29 +120,40 @@ export function evaluatePath(
       const presetCount = block.presetCount ?? 1;
       const active = accumulatedCount >= presetCount;
       power = power && active;
+      if (
+        block.accumulatedCount === accumulatedCount &&
+        block.presetCount === presetCount &&
+        block.previousInput === inputWasPowered &&
+        block.active === active
+      ) return block;
       return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
     }
 
     if (block.kind === 'coil-set') {
       if (power) nextMemory[address] = true;
       const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
+      if (block.active === active) return block;
       return { ...block, active };
     }
 
     if (block.kind === 'coil-reset') {
       if (power) nextMemory[address] = false;
       const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
+      if (block.active === active) return block;
       return { ...block, active };
     }
 
     if (block.kind === 'coil') {
-      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
+      const active = forcedValue ? forcedValue === 'on' : power;
+      if (block.active === active) return block;
+      return { ...block, active };
     }
 
     if (block.kind === 'counter-reset') {
       if (power) nextMemory[`${address}_RESET`] = true;
       else nextMemory[`${address}_RESET`] = false;
       const active = forcedValue ? forcedValue === 'on' : power;
+      if (block.active === active) return block;
       return { ...block, active };
     }
 
@@ -159,6 +174,11 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const branches = rung.branches?.map((branch) => {
     const branchResult = evaluatePath(branch.blocks, deltaMs, nextMemory, forceState);
     nextMemory = branchResult.memory;
+
+    // Preserve branch referential equality if blocks haven't changed
+    const blocksChanged = branchResult.blocks.some((b, i) => b !== branch.blocks[i]) || branchResult.blocks.length !== branch.blocks.length;
+    if (!blocksChanged) return branch;
+
     return { ...branch, blocks: branchResult.blocks };
   });
 
@@ -168,10 +188,22 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const outputResult = evaluatePath(outputBlocks, deltaMs, nextMemory, forceState, rungPower);
   nextMemory = outputResult.memory;
 
+  const nextBlocks = [...mainResult.blocks, ...outputResult.blocks];
+  const blocksChanged = nextBlocks.some((b, i) => b !== rung.blocks[i]) || nextBlocks.length !== rung.blocks.length;
+
+  const branchesChanged =
+    (!branches && !!rung.branches) ||
+    (!!branches && !rung.branches) ||
+    (branches && rung.branches && (branches.some((b, i) => b !== rung.branches![i]) || branches.length !== rung.branches.length));
+
+  if (!blocksChanged && !branchesChanged) {
+    return { rung, memory: nextMemory };
+  }
+
   return {
     rung: {
       ...rung,
-      blocks: [...mainResult.blocks, ...outputResult.blocks],
+      blocks: nextBlocks,
       branches
     },
     memory: nextMemory
