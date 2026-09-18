@@ -1,3 +1,4 @@
+import React, { useCallback } from 'react';
 import { EndapProject } from '../../types/endap';
 import { RuntimeMode } from '../../hooks/useStudioController';
 import { LadderRung } from './LadderRung';
@@ -14,6 +15,16 @@ export interface LadderEditorProps {
 }
 
 export function LadderEditor({ project, runtimeMode, selectedRungId, selectedBlockId, actions }: LadderEditorProps) {
+  const { setSelectedRungId, setSelectedBlockId } = actions;
+
+  const handleSelectBlock = useCallback(
+    (rungId: string, blockId: string) => {
+      setSelectedRungId(rungId);
+      setSelectedBlockId(blockId);
+    },
+    [setSelectedRungId, setSelectedBlockId]
+  );
+
   return (
     <section className="ladder-panel" aria-label="Editor Ladder">
       <div className="ladder-header">
@@ -32,11 +43,8 @@ export function LadderEditor({ project, runtimeMode, selectedRungId, selectedBlo
             index={index}
             selectedRungId={selectedRungId}
             selectedBlockId={selectedBlockId}
-            onSelectRung={actions.setSelectedRungId}
-            onSelectBlock={(rungId, blockId) => {
-              actions.setSelectedRungId(rungId);
-              actions.setSelectedBlockId(blockId);
-            }}
+            onSelectRung={setSelectedRungId}
+            onSelectBlock={handleSelectBlock}
           />
         ))}
       </div>

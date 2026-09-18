@@ -1,0 +1,155 @@
+<<<<<<< SEARCH
+    if (block.kind === 'memory-contact-no') {
+      const active = readForcedValue(address, nextMemory, forceState);
+      power = power && active;
+      return { ...block, active };
+    }
+
+    if (block.kind === 'memory-contact-nc') {
+      const active = !readForcedValue(address, nextMemory, forceState);
+      power = power && active;
+      return { ...block, active };
+    }
+
+    if (block.kind === 'timer-ton') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
+      const active = elapsedMs >= presetMs;
+      power = power && active;
+      return { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'timer-tof') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
+      const active = power || elapsedMs < presetMs;
+      power = active;
+      return { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'counter') {
+      const inputWasPowered = power;
+      const isReset = nextMemory[`${address}_RESET`] === true;
+      let accumulatedCount = block.accumulatedCount ?? 0;
+      if (isReset) {
+        accumulatedCount = 0;
+      } else if (inputWasPowered && !block.previousInput) {
+        accumulatedCount += 1;
+      }
+      const presetCount = block.presetCount ?? 1;
+      const active = accumulatedCount >= presetCount;
+      power = power && active;
+      return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
+    }
+
+    if (block.kind === 'coil-set') {
+      if (power) nextMemory[address] = true;
+      const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
+      return { ...block, active };
+    }
+
+    if (block.kind === 'coil-reset') {
+      if (power) nextMemory[address] = false;
+      const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
+      return { ...block, active };
+    }
+
+    if (block.kind === 'coil') {
+      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
+    }
+
+    if (block.kind === 'counter-reset') {
+      if (power) nextMemory[`${address}_RESET`] = true;
+      else nextMemory[`${address}_RESET`] = false;
+      const active = forcedValue ? forcedValue === 'on' : power;
+      return { ...block, active };
+    }
+
+    return block;
+  });
+
+  return { blocks: nextBlocks, memory: nextMemory };
+}
+=======
+    if (block.kind === 'memory-contact-no') {
+      const active = readForcedValue(address, nextMemory, forceState);
+      power = power && active;
+      return block.active === active ? block : { ...block, active };
+    }
+
+    if (block.kind === 'memory-contact-nc') {
+      const active = !readForcedValue(address, nextMemory, forceState);
+      power = power && active;
+      return block.active === active ? block : { ...block, active };
+    }
+
+    if (block.kind === 'timer-ton') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
+      const active = elapsedMs >= presetMs;
+      power = power && active;
+      return block.elapsedMs === elapsedMs && block.active === active ? block : { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'timer-tof') {
+      const presetMs = block.presetMs ?? 1000;
+      const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
+      const active = power || elapsedMs < presetMs;
+      power = active;
+      return block.elapsedMs === elapsedMs && block.active === active ? block : { ...block, elapsedMs, active };
+    }
+
+    if (block.kind === 'counter') {
+      const inputWasPowered = power;
+      const isReset = nextMemory[`${address}_RESET`] === true;
+      let accumulatedCount = block.accumulatedCount ?? 0;
+      if (isReset) {
+        accumulatedCount = 0;
+      } else if (inputWasPowered && !block.previousInput) {
+        accumulatedCount += 1;
+      }
+      const presetCount = block.presetCount ?? 1;
+      const active = accumulatedCount >= presetCount;
+      power = power && active;
+      if (
+        block.accumulatedCount === accumulatedCount &&
+        block.presetCount === presetCount &&
+        block.previousInput === inputWasPowered &&
+        block.active === active
+      ) {
+        return block;
+      }
+      return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
+    }
+
+    if (block.kind === 'coil-set') {
+      if (power) nextMemory[address] = true;
+      const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
+      return block.active === active ? block : { ...block, active };
+    }
+
+    if (block.kind === 'coil-reset') {
+      if (power) nextMemory[address] = false;
+      const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
+      return block.active === active ? block : { ...block, active };
+    }
+
+    if (block.kind === 'coil') {
+      const active = forcedValue ? forcedValue === 'on' : power;
+      return block.active === active ? block : { ...block, active };
+    }
+
+    if (block.kind === 'counter-reset') {
+      if (power) nextMemory[`${address}_RESET`] = true;
+      else nextMemory[`${address}_RESET`] = false;
+      const active = forcedValue ? forcedValue === 'on' : power;
+      return block.active === active ? block : { ...block, active };
+    }
+
+    return block;
+  });
+
+  const blocksChanged = nextBlocks.some((block, i) => block !== blocks[i]);
+  return { blocks: blocksChanged ? nextBlocks : blocks, memory: nextMemory };
+}
+>>>>>>> REPLACE
