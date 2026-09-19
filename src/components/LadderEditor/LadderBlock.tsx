@@ -1,17 +1,19 @@
+import { memo } from 'react';
 import { EndapLadderBlock } from '../../types/endap';
 import { blockClass, blockSymbol, counterProgress, timerProgress } from './utils';
 
 export interface LadderBlockProps {
   block: EndapLadderBlock;
   isSelected: boolean;
-  onClick: () => void;
+  rungId: string;
+  onSelectBlock: (rungId: string, blockId: string) => void;
 }
 
-export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
+export const LadderBlock = memo(function LadderBlock({ block, isSelected, rungId, onSelectBlock }: LadderBlockProps) {
   return (
     <button
       className={blockClass(block, isSelected)}
-      onClick={onClick}
+      onClick={() => onSelectBlock(rungId, block.id)}
       type="button"
     >
       <span className="block-symbol">{blockSymbol(block)}</span>
@@ -34,4 +36,4 @@ export function LadderBlock({ block, isSelected, onClick }: LadderBlockProps) {
       )}
     </button>
   );
-}
+});
