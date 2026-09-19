@@ -1,0 +1,3 @@
+## 2024-05-24 - React Re-renders and Simulation Loops
+**Learning:** In a codebase where a cyclical simulation loop (like `runScanSimulation` running every 200ms) continually updates state, the backend state evaluation functions *must* return referentially identical objects if their internal values haven't changed. Failing to do so breaks React's reconciliation, causing the entire tree (like hundreds of `LadderBlock`s) to re-render constantly even when the simulation is idle.
+**Action:** Always check the backend/store evaluation functions for referential equality and pair it with `React.memo` and `useCallback` on the frontend when optimizing heavy, high-frequency React apps.
