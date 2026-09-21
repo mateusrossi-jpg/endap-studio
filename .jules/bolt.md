@@ -1,0 +1,3 @@
+## 2024-05-19 - Massive Cascading Re-renders in React Due to Shallow Cloning
+**Learning:** In a fast loop like a PLC simulator (200ms `runScanSimulation`), returning shallow clones in evaluation functions (`evaluatePath`, `evaluateRung`) unconditionally on each tick causes catastrophic cascading re-renders in React because every prop object loses referential equality.
+**Action:** Always verify if state *actually* changed before cloning memory states or mapping over DOM representation blocks in high-frequency React update loops. Returning the exact previous object preserves referential equality and allows React memoization (or regular Diffing checks) to work effectively.

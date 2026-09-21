@@ -60,51 +60,54 @@ export function evaluatePath(
   inputPower = true
 ) {
   let power = inputPower;
-  const nextMemory: MemoryMap = { ...memory };
+  let nextMemory = memory;
+  let memoryCloned = false;
+  let blocksChanged = false;
+
+  const writeMemory = (key: string, value: boolean) => {
+    if (nextMemory[key] !== value) {
+      if (!memoryCloned) {
+        nextMemory = { ...nextMemory };
+        memoryCloned = true;
+      }
+      nextMemory[key] = value;
+    }
+  };
 
   const nextBlocks = blocks.map((block) => {
     const address = getAddress(block);
     const forcedValue = forceState[address]?.target;
+    let nextBlock = block;
 
     if (block.kind === 'contact-no') {
       power = power && block.active;
-      return block;
-    }
-
-    if (block.kind === 'contact-nc') {
+    } else if (block.kind === 'contact-nc') {
       power = power && !block.active;
-      return block;
-    }
-
-    if (block.kind === 'memory-contact-no') {
+    } else if (block.kind === 'memory-contact-no') {
       const active = readForcedValue(address, nextMemory, forceState);
       power = power && active;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'memory-contact-nc') {
+      if (block.active !== active) nextBlock = { ...block, active };
+    } else if (block.kind === 'memory-contact-nc') {
       const active = !readForcedValue(address, nextMemory, forceState);
       power = power && active;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'timer-ton') {
+      if (block.active !== active) nextBlock = { ...block, active };
+    } else if (block.kind === 'timer-ton') {
       const presetMs = block.presetMs ?? 1000;
       const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
       const active = elapsedMs >= presetMs;
       power = power && active;
-      return { ...block, elapsedMs, active };
-    }
-
-    if (block.kind === 'timer-tof') {
+      if (block.active !== active || block.elapsedMs !== elapsedMs) {
+        nextBlock = { ...block, elapsedMs, active };
+      }
+    } else if (block.kind === 'timer-tof') {
       const presetMs = block.presetMs ?? 1000;
       const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
       const active = power || elapsedMs < presetMs;
       power = active;
-      return { ...block, elapsedMs, active };
-    }
-
-    if (block.kind === 'counter') {
+      if (block.active !== active || block.elapsedMs !== elapsedMs) {
+        nextBlock = { ...block, elapsedMs, active };
+      }
+    } else if (block.kind === 'counter') {
       const inputWasPowered = power;
       const isReset = nextMemory[`${address}_RESET`] === true;
       let accumulatedCount = block.accumulatedCount ?? 0;
@@ -116,36 +119,42 @@ export function evaluatePath(
       const presetCount = block.presetCount ?? 1;
       const active = accumulatedCount >= presetCount;
       power = power && active;
-      return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
-    }
-
-    if (block.kind === 'coil-set') {
-      if (power) nextMemory[address] = true;
+      if (
+        block.active !== active ||
+        block.accumulatedCount !== accumulatedCount ||
+        block.presetCount !== presetCount ||
+        block.previousInput !== inputWasPowered
+      ) {
+        nextBlock = { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
+      }
+    } else if (block.kind === 'coil-set') {
+      if (power) writeMemory(address, true);
       const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
-      return { ...block, active };
-    }
-
-    if (block.kind === 'coil-reset') {
-      if (power) nextMemory[address] = false;
+      if (block.active !== active) nextBlock = { ...block, active };
+    } else if (block.kind === 'coil-reset') {
+      if (power) writeMemory(address, false);
       const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
-      return { ...block, active };
-    }
-
-    if (block.kind === 'coil') {
-      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
-    }
-
-    if (block.kind === 'counter-reset') {
-      if (power) nextMemory[`${address}_RESET`] = true;
-      else nextMemory[`${address}_RESET`] = false;
+      if (block.active !== active) nextBlock = { ...block, active };
+    } else if (block.kind === 'coil') {
       const active = forcedValue ? forcedValue === 'on' : power;
-      return { ...block, active };
+      if (block.active !== active) nextBlock = { ...block, active };
+    } else if (block.kind === 'counter-reset') {
+      writeMemory(`${address}_RESET`, power);
+      const active = forcedValue ? forcedValue === 'on' : power;
+      if (block.active !== active) nextBlock = { ...block, active };
     }
 
-    return block;
+    if (nextBlock !== block) {
+      blocksChanged = true;
+    }
+
+    return nextBlock;
   });
 
-  return { blocks: nextBlocks, memory: nextMemory };
+  return {
+    blocks: blocksChanged ? nextBlocks : blocks,
+    memory: nextMemory
+  };
 }
 
 export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: MemoryMap, forceState: ForceState) {
@@ -156,10 +165,15 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const mainResult = evaluatePath(conditionBlocks, deltaMs, nextMemory, forceState);
   nextMemory = mainResult.memory;
 
+  let branchesChanged = false;
   const branches = rung.branches?.map((branch) => {
     const branchResult = evaluatePath(branch.blocks, deltaMs, nextMemory, forceState);
     nextMemory = branchResult.memory;
-    return { ...branch, blocks: branchResult.blocks };
+    if (branchResult.blocks !== branch.blocks) {
+      branchesChanged = true;
+      return { ...branch, blocks: branchResult.blocks };
+    }
+    return branch;
   });
 
   const branchPower = branches?.some(branchIsEnergized) ?? false;
@@ -167,6 +181,12 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const rungPower = mainResult.blocks.length === 0 ? branchPower : mainPower || branchPower;
   const outputResult = evaluatePath(outputBlocks, deltaMs, nextMemory, forceState, rungPower);
   nextMemory = outputResult.memory;
+
+  const blocksChanged = mainResult.blocks !== conditionBlocks || outputResult.blocks !== outputBlocks;
+
+  if (!blocksChanged && !branchesChanged) {
+    return { rung, memory: nextMemory };
+  }
 
   return {
     rung: {
