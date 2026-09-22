@@ -1,7 +1,8 @@
-// src/components/RungViewer.tsx
+/*  src/components/RungViewer.tsx */
 import React, { useRef, useState, MouseEvent, TouchEvent } from 'react';
 import { EndapLadderRung } from '../types/endap';
-import styles from './RungViewer.module.css';
+import styles from "./RungViewer.module.css";
+
 
 interface RungViewerProps {
   rungs: EndapLadderRung[];
