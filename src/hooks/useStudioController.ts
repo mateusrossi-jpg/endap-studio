@@ -561,7 +561,7 @@ export function useStudioController() {
     createRuntimeWarningEvent('ladder.block_changed', selectedBlockId, 'Bloco removido do Ladder');
   }
 
-  function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
+    function runScanSimulation(mode: 'manual' | 'auto' = 'manual', deltaMs = STEP_SCAN_DELTA_MS) {
     const scanStartedAt = performance.now();
     setProject((currentProject) => {
       if (!currentProject) return currentProject;
@@ -571,9 +571,12 @@ export function useStudioController() {
       const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
       let nextMemory = previousMemory;
+
+      let rungsChanged = false;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
         const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
         nextMemory = result.memory;
+        if (result.rung !== rung) rungsChanged = true;
         return result.rung;
       });
 
@@ -585,7 +588,7 @@ export function useStudioController() {
         ladderProgram: {
           ...currentProject.ladderProgram,
           scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
-          rungs: simulatedRungs
+          rungs: rungsChanged ? simulatedRungs : currentProject.ladderProgram.rungs
         }
       };
 
