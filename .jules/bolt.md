@@ -1,0 +1,3 @@
+## 2024-06-25 - React Renders & Referential Equality in Simulation Loops
+**Learning:** The `runScanSimulation` cyclical loop running every 200ms caused massive GC pressure and React re-renders because the state evaluation functions (`evaluatePath`, `evaluateRung`) were unconditionally deep-cloning object states and returning new array references for unchanged rungs/blocks. Even without changes, new identical references were forcing React to reconcile the entire tree.
+**Action:** Preserved referential equality in runtime evaluations. By checking state properties and explicitly mutating an internal clone ONLY when changes happen, we preserve object references across identical scans, dramatically improving UI rendering performance during the simulation's fast RUN mode.
