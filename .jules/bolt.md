@@ -1,0 +1,3 @@
+## 2026-09-27 - Preserve referential equality in runtime simulation
+**Learning:** The application's runtime mode relies on a cyclical simulation loop (`runScanSimulation`) that runs every 200ms. State evaluation functions (like `evaluatePath` in `ladderRuntime.ts`) must preserve referential equality by avoiding unconditional shallow cloning or array mapping. Only create new object/array references if the internal state actually changed to prevent massive cascading React re-renders.
+**Action:** When updating cyclical loops that produce state bound to UI (React), always structure transformations (like `.map` operations) to return the exact same object reference if the data did not logically mutate.
