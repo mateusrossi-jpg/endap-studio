@@ -60,7 +60,18 @@ export function evaluatePath(
   inputPower = true
 ) {
   let power = inputPower;
-  const nextMemory: MemoryMap = { ...memory };
+  let memoryChanged = false;
+  let nextMemory: MemoryMap = memory;
+
+  const getNextMemory = () => {
+    if (!memoryChanged) {
+      memoryChanged = true;
+      nextMemory = { ...memory };
+    }
+    return nextMemory;
+  };
+
+  let blocksChanged = false;
 
   const nextBlocks = blocks.map((block) => {
     const address = getAddress(block);
@@ -79,13 +90,15 @@ export function evaluatePath(
     if (block.kind === 'memory-contact-no') {
       const active = readForcedValue(address, nextMemory, forceState);
       power = power && active;
-      return { ...block, active };
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     if (block.kind === 'memory-contact-nc') {
       const active = !readForcedValue(address, nextMemory, forceState);
       power = power && active;
-      return { ...block, active };
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     if (block.kind === 'timer-ton') {
@@ -93,7 +106,8 @@ export function evaluatePath(
       const elapsedMs = power ? Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs) : 0;
       const active = elapsedMs >= presetMs;
       power = power && active;
-      return { ...block, elapsedMs, active };
+      if (block.elapsedMs !== elapsedMs || block.active !== active) { blocksChanged = true; return { ...block, elapsedMs, active }; }
+      return block;
     }
 
     if (block.kind === 'timer-tof') {
@@ -101,7 +115,8 @@ export function evaluatePath(
       const elapsedMs = power ? 0 : Math.min(presetMs, (block.elapsedMs ?? 0) + deltaMs);
       const active = power || elapsedMs < presetMs;
       power = active;
-      return { ...block, elapsedMs, active };
+      if (block.elapsedMs !== elapsedMs || block.active !== active) { blocksChanged = true; return { ...block, elapsedMs, active }; }
+      return block;
     }
 
     if (block.kind === 'counter') {
@@ -116,36 +131,46 @@ export function evaluatePath(
       const presetCount = block.presetCount ?? 1;
       const active = accumulatedCount >= presetCount;
       power = power && active;
-      return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
+      if (block.accumulatedCount !== accumulatedCount || block.presetCount !== presetCount || block.previousInput !== inputWasPowered || block.active !== active) {
+        blocksChanged = true;
+        return { ...block, accumulatedCount, presetCount, previousInput: inputWasPowered, active };
+      }
+      return block;
     }
 
     if (block.kind === 'coil-set') {
-      if (power) nextMemory[address] = true;
+      if (power && nextMemory[address] !== true) getNextMemory()[address] = true;
       const active = forcedValue ? forcedValue === 'on' : nextMemory[address] ?? false;
-      return { ...block, active };
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     if (block.kind === 'coil-reset') {
-      if (power) nextMemory[address] = false;
+      if (power && nextMemory[address] !== false) getNextMemory()[address] = false;
       const active = forcedValue ? forcedValue === 'on' : !(nextMemory[address] ?? false);
-      return { ...block, active };
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     if (block.kind === 'coil') {
-      return { ...block, active: forcedValue ? forcedValue === 'on' : power };
+      const active = forcedValue ? forcedValue === 'on' : power;
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     if (block.kind === 'counter-reset') {
-      if (power) nextMemory[`${address}_RESET`] = true;
-      else nextMemory[`${address}_RESET`] = false;
+      const isReset = power;
+      const resetKey = `${address}_RESET`;
+      if (nextMemory[resetKey] !== isReset) getNextMemory()[resetKey] = isReset;
       const active = forcedValue ? forcedValue === 'on' : power;
-      return { ...block, active };
+      if (block.active !== active) { blocksChanged = true; return { ...block, active }; }
+      return block;
     }
 
     return block;
   });
 
-  return { blocks: nextBlocks, memory: nextMemory };
+  return { blocks: blocksChanged ? nextBlocks : blocks, memory: nextMemory };
 }
 
 export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: MemoryMap, forceState: ForceState) {
@@ -156,10 +181,15 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const mainResult = evaluatePath(conditionBlocks, deltaMs, nextMemory, forceState);
   nextMemory = mainResult.memory;
 
+  let branchesChanged = false;
   const branches = rung.branches?.map((branch) => {
     const branchResult = evaluatePath(branch.blocks, deltaMs, nextMemory, forceState);
     nextMemory = branchResult.memory;
-    return { ...branch, blocks: branchResult.blocks };
+    if (branchResult.blocks !== branch.blocks) {
+      branchesChanged = true;
+      return { ...branch, blocks: branchResult.blocks };
+    }
+    return branch;
   });
 
   const branchPower = branches?.some(branchIsEnergized) ?? false;
@@ -168,11 +198,17 @@ export function evaluateRung(rung: EndapLadderRung, deltaMs: number, memory: Mem
   const outputResult = evaluatePath(outputBlocks, deltaMs, nextMemory, forceState, rungPower);
   nextMemory = outputResult.memory;
 
+  const blocksChanged = mainResult.blocks !== conditionBlocks || outputResult.blocks !== outputBlocks;
+
+  if (!blocksChanged && !branchesChanged) {
+    return { rung, memory: nextMemory };
+  }
+
   return {
     rung: {
       ...rung,
-      blocks: [...mainResult.blocks, ...outputResult.blocks],
-      branches
+      blocks: blocksChanged ? [...mainResult.blocks, ...outputResult.blocks] : rung.blocks,
+      branches: branchesChanged ? branches : rung.branches
     },
     memory: nextMemory
   };
