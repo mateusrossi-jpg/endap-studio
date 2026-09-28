@@ -1,0 +1,3 @@
+## 2024-05-30 - Referential equality in high-frequency simulation loop
+**Learning:** The application's core runtime relies on a cyclical 200ms simulation loop (`runScanSimulation`). Unconditionally cloning objects or mapping arrays in state evaluation functions (like `evaluatePath` and `evaluateRung`) destroys referential equality on every tick, even when the underlying data hasn't changed. This causes massive cascading React re-renders across the entire app.
+**Action:** In high-frequency React update loops, optimize evaluation functions to preserve referential equality. Only create new object/array references if the internal state actually mutated, returning the original references otherwise.
