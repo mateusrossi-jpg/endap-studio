@@ -38,8 +38,8 @@ export function SnapshotPanel({ snapshots, onCreateSnapshot, onDeleteSnapshot, o
                 <small>{formatSnapshotTime(snapshot.createdAt)} · {snapshot.project.ladderProgram.rungs.length} rungs</small>
               </div>
               <div className="watch-actions">
-                <button type="button" onClick={() => onRestoreSnapshot(snapshot)}>Restaurar</button>
-                <button type="button" onClick={() => onDeleteSnapshot(snapshot.id)}>Remover</button>
+                <button type="button" onClick={() => onRestoreSnapshot(snapshot)} aria-label={`Restaurar snapshot ${snapshot.name}`}>Restaurar</button>
+                <button type="button" onClick={() => onDeleteSnapshot(snapshot.id)} aria-label={`Remover snapshot ${snapshot.name}`}>Remover</button>
               </div>
             </article>
           ))}

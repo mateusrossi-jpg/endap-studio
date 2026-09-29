@@ -42,9 +42,9 @@ export function FieldPanels({
                 <small>{point.direction.toUpperCase()}</small>
                 <code>{point.nodeId}</code>
                 <div className="watch-actions">
-                  <button type="button" onClick={() => onToggleIoState(point.id)}>Alternar</button>
-                  <button type="button" onClick={() => onToggleIoManual(point.id)}>{point.manualMode ? 'Manual OFF' : 'Manual ON'}</button>
-                  <button type="button" onClick={() => onToggleIoTest(point.id)}>{point.testMode ? 'Teste OFF' : 'Teste ON'}</button>
+                  <button type="button" onClick={() => onToggleIoState(point.id)} aria-label={`Alternar estado do ponto ${point.address}`}>Alternar</button>
+                  <button type="button" onClick={() => onToggleIoManual(point.id)} aria-label={`${point.manualMode ? 'Desativar' : 'Ativar'} modo manual para ${point.address}`}>{point.manualMode ? 'Manual OFF' : 'Manual ON'}</button>
+                  <button type="button" onClick={() => onToggleIoTest(point.id)} aria-label={`${point.testMode ? 'Desativar' : 'Ativar'} modo de teste para ${point.address}`}>{point.testMode ? 'Teste OFF' : 'Teste ON'}</button>
                 </div>
               </article>
             ))}
