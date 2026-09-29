@@ -34,15 +34,15 @@ export function WatchTable({ items, onToggleMemory, onForce, onReleaseForce }: W
               <code>{item.force ? `FORCE ${item.force.toUpperCase()}` : item.value}</code>
               <div className="watch-actions">
                 {item.canToggle && (
-                  <button type="button" onClick={() => onToggleMemory(item.address)}>
+                  <button type="button" onClick={() => onToggleMemory(item.address)} aria-label={`Alternar estado de ${item.address}`}>
                     Alternar
                   </button>
                 )}
                 {item.canForce && (
                   <>
-                    <button type="button" onClick={() => onForce(item.address, 'on')}>Force ON</button>
-                    <button type="button" onClick={() => onForce(item.address, 'off')}>Force OFF</button>
-                    <button type="button" onClick={() => onReleaseForce(item.address)}>Release</button>
+                    <button type="button" onClick={() => onForce(item.address, 'on')} aria-label={`Forçar ${item.address} para ON`}>Force ON</button>
+                    <button type="button" onClick={() => onForce(item.address, 'off')} aria-label={`Forçar ${item.address} para OFF`}>Force OFF</button>
+                    <button type="button" onClick={() => onReleaseForce(item.address)} aria-label={`Liberar force de ${item.address}`}>Release</button>
                   </>
                 )}
               </div>
