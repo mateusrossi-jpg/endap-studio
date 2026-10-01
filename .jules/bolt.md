@@ -1,0 +1,3 @@
+## 2024-05-24 - [Referential Equality in Simulation Loop]
+**Learning:** The PLC ladder logic application runs a cyclical simulation loop (`runScanSimulation`) every 200ms. Returning new object references from evaluation functions (`evaluatePath`, `evaluateRung`) unconditionally destroys React's referential equality checks (`React.memo`), causing massive UI re-renders on every scan step even when the actual underlying state logic hasn't changed.
+**Action:** When working on state transitions or simulations that loop continuously, implement strict referential equality. Only return new object or array references if nested properties actually mutate. Otherwise, return the original reference.
