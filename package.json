@@ -1,29 +1,5 @@
 {
-  "name": "endap-studio",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "preview": "vite preview --host 0.0.0.0"
-  },
-  "dependencies": {
-    "@capacitor/core": "^8.3.2",
-    "@vitejs/plugin-react": "latest",
-    "expo": "^55.0.23",
-    "react": "latest",
-    "react-dom": "latest",
-    "typescript": "latest",
-    "vite": "latest",
-    "vite-plugin-pwa": "latest"
-  },
   "devDependencies": {
-    "@capacitor/android": "^8.3.2",
-    "@capacitor/cli": "^8.3.2",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "vitest": "^4.1.5"
+    "playwright": "^1.61.0"
   }
 }
