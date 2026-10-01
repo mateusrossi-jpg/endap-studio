@@ -26,13 +26,15 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
         <div className="rail right" />
         <div className="wire" />
 
-        <div className="block-row">
+        <div className="block-row" onClick={(e) => {
+          const btn = (e.target as HTMLElement).closest('button[data-block-id]');
+          if (btn) onSelectBlock(rung.id, btn.getAttribute('data-block-id')!);
+        }}>
           {rung.blocks.map((block) => (
             <LadderBlock
               key={block.id}
               block={block}
               isSelected={selectedBlockId === block.id}
-              onClick={() => onSelectBlock(rung.id, block.id)}
             />
           ))}
         </div>
@@ -40,7 +42,10 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
         {!!rung.branches?.length && (
           <div className="branch-stack">
             {rung.branches.map((branch) => (
-              <div className={`branch-path ${branchIsEnergized(branch) ? 'is-branch-energized' : ''}`} key={branch.id}>
+              <div className={`branch-path ${branchIsEnergized(branch) ? 'is-branch-energized' : ''}`} key={branch.id} onClick={(e) => {
+                const btn = (e.target as HTMLElement).closest('button[data-block-id]');
+                if (btn) onSelectBlock(rung.id, btn.getAttribute('data-block-id')!);
+              }}>
                 <span className="branch-label">{branch.title ?? 'OR'}</span>
                 <div className="branch-wire" />
                 <div className="branch-blocks">
@@ -49,7 +54,6 @@ export function LadderRung({ rung, index, selectedRungId, selectedBlockId, onSel
                       key={block.id}
                       block={block}
                       isSelected={selectedBlockId === block.id}
-                      onClick={() => onSelectBlock(rung.id, block.id)}
                     />
                   ))}
                 </div>
