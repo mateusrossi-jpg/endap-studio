@@ -40,13 +40,14 @@ export const IntegrationStore: React.FC<IntegrationStoreProps> = ({ integrations
                   className={`${styles.card} ${integration.enabled ? styles.active : ''}`}
                 >
                   <div className={styles.cardHeader}>
-                    <div className={styles.iconWrapper}>{integration.icon}</div>
+                    <div className={styles.iconWrapper} aria-hidden="true">{integration.icon}</div>
                     <div className={styles.toggleWrapper}>
                       <label className={styles.switch}>
                         <input 
                           type="checkbox" 
                           checked={integration.enabled} 
-                          onChange={() => onToggle(integration.id)} 
+                          onChange={() => onToggle(integration.id)}
+                          aria-label={`Alternar ${integration.name}`}
                         />
                         <span className={styles.slider}></span>
                       </label>
@@ -66,6 +67,8 @@ export const IntegrationStore: React.FC<IntegrationStoreProps> = ({ integrations
                       className={styles.configButton}
                       onClick={() => onConfigure(integration.id)}
                       disabled={!integration.enabled}
+                      aria-label={`Configurar ${integration.name}`}
+                      title={integration.enabled ? 'Configurar integração' : 'Ative a integração para configurar'}
                     >
                       Configurar
                     </button>
