@@ -1,0 +1,3 @@
+## 2024-05-18 - [Referential Equality in evaluatePath]
+**Learning:** In the `evaluatePath` function used heavily in a 200ms interval loop for `endap-studio`, previous implementations reconstructed new objects blindly. This was a critical performance bottleneck creating a massive amount of garbage and unnecessarily triggering large React re-renders since components check referential equality for performance optimizations.
+**Action:** When updating heavily processed functional logic, use lazy cloning/structural sharing (e.g. `blocksChanged` tracking) to only create new object references if internal values actually changed.
