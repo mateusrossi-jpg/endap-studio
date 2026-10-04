@@ -1,0 +1,3 @@
+## 2024-10-04 - Ladder Runtime Referential Equality Optimization
+**Learning:** The continuous simulation loop runs at intervals and repeatedly evaluates ladder rungs. When state functions (like `evaluatePath`) always generate new object references (e.g., shallow cloning memory map unconditionally or `map` returning new objects), it triggers cascading re-renders across the entire React component tree every loop iteration, even if the underlying logic state has not actually changed.
+**Action:** Implement lazy/structural cloning strategies for state loop logic that only creates new object references if properties are actually mutated, thereby preserving reference equality and halting unnecessary downstream re-renders.
