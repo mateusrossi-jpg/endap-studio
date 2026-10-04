@@ -1,0 +1,3 @@
+## 2026-10-04 - Adding ARIA labels to mobile menu buttons
+**Learning:** The frontend build system uses Vite and PostCSS which strictly enforces CSS block comments (/* */) in CSS module files instead of line comments (//), which causes the build to fail if present. Also, ensure no extraneous files like dev_server.log or a locally regenerated pnpm-lock.yaml are checked in accidentally during the verification process.
+**Action:** When working on UX/a11y improvements, ensure any required CSS changes strictly follow the /* */ comment pattern in module files. Additionally, carefully inspect git status and use targeted git additions or removals to prevent polluting the repository with debug logs or unintended lockfile updates.
