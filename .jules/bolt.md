@@ -1,0 +1,3 @@
+## 2023-10-25 - Ladder Runtime State Mutation
+**Learning:** React state updates in the simulation loop (`runScanSimulation`) depend on `evaluatePath` and `evaluateRung` generating a new `Project` object. Before this optimization, they were unconditionally creating massive amounts of garbage by doing `memory = {...memory}` and `blocks.map(block => block)` for unchanged items in a 200ms tick cycle.
+**Action:** When working on tight loop simulation environments integrated into React (like ENDAP studio), aggressively use lazy cloning patterns to ensure strict referential equality. A new instance should only be created if inner state genuinely mutated. This completely bypasses expensive deep diffing/rendering.
