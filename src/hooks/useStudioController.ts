@@ -571,37 +571,74 @@ export function useStudioController() {
       const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
       let nextMemory = previousMemory;
+
+      let rungsChanged = false;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
         const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
         nextMemory = result.memory;
+        if (result.rung !== rung) {
+          rungsChanged = true;
+        }
         return result.rung;
       });
 
-      setMemoryMap(nextMemory);
+      if (nextMemory !== previousMemory) {
+        setMemoryMap(nextMemory);
+      }
 
-      const nextProject = {
-        ...currentProject,
-        updatedAt: new Date().toISOString(),
-        ladderProgram: {
-          ...currentProject.ladderProgram,
-          scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
-          rungs: simulatedRungs
+      const scanTimeMs = Number((3.8 + Math.random() * 1.6).toFixed(2));
+
+      let nextProject = currentProject;
+      if (rungsChanged) {
+        nextProject = {
+          ...currentProject,
+          updatedAt: new Date().toISOString(),
+          ladderProgram: {
+            ...currentProject.ladderProgram,
+            scanTimeMs,
+            rungs: simulatedRungs
+          }
+        };
+      } else {
+        if (nextMemory !== previousMemory) {
+           nextProject = {
+             ...currentProject,
+             updatedAt: new Date().toISOString(),
+             ladderProgram: {
+               ...currentProject.ladderProgram,
+               scanTimeMs,
+               rungs: currentProject.ladderProgram.rungs
+             }
+           };
+        } else {
+            if (mode === 'auto') {
+              return currentProject; // HUGE PERFORMANCE BOOST: No state change = no re-render
+            }
+            nextProject = {
+              ...currentProject,
+              ladderProgram: {
+                ...currentProject.ladderProgram,
+                scanTimeMs
+              }
+            };
         }
-      };
+      }
 
-      publishBooleanDiff(previousMemory, nextMemory, createMemoryChangedEvent);
-      publishBooleanDiff(previousCoils, collectCoilStates(nextProject), (address, value) => {
-        createRuntimeInfoEvent('coil.changed', address, `${address} ${value ? 'energizada' : 'desenergizada'}`, { address, value });
-      });
-      publishBooleanDiff(previousTimers, collectTimerDoneStates(nextProject), (address, value) => {
-        createRuntimeInfoEvent('timer.changed', address, `${address} ${value ? 'completou preset' : 'reiniciou'}`, { address, done: value });
-      });
-      publishBooleanDiff(previousCounters, collectCounterDoneStates(nextProject), (address, value) => {
-        createRuntimeInfoEvent('ladder.block_changed', address, `${address} ${value ? 'atingiu preset' : 'abaixo do preset'}`, { address, done: value });
-      });
-      publishBooleanDiff(previousBranches, collectBranchStates(nextProject), (address, value) => {
-        createRuntimeInfoEvent('ladder.branch_changed', address, `${address} ${value ? 'ativada' : 'desativada'}`, { branchId: address, active: value });
-      });
+      if (nextProject !== currentProject) {
+        publishBooleanDiff(previousMemory, nextMemory, createMemoryChangedEvent);
+        publishBooleanDiff(previousCoils, collectCoilStates(nextProject), (address, value) => {
+          createRuntimeInfoEvent('coil.changed', address, `${address} ${value ? 'energizada' : 'desenergizada'}`, { address, value });
+        });
+        publishBooleanDiff(previousTimers, collectTimerDoneStates(nextProject), (address, value) => {
+          createRuntimeInfoEvent('timer.changed', address, `${address} ${value ? 'completou preset' : 'reiniciou'}`, { address, done: value });
+        });
+        publishBooleanDiff(previousCounters, collectCounterDoneStates(nextProject), (address, value) => {
+          createRuntimeInfoEvent('ladder.block_changed', address, `${address} ${value ? 'atingiu preset' : 'abaixo do preset'}`, { address, done: value });
+        });
+        publishBooleanDiff(previousBranches, collectBranchStates(nextProject), (address, value) => {
+          createRuntimeInfoEvent('ladder.branch_changed', address, `${address} ${value ? 'ativada' : 'desativada'}`, { branchId: address, active: value });
+        });
+      }
 
       return nextProject;
     });

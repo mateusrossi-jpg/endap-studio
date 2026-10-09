@@ -1,0 +1,3 @@
+## 2024-05-18 - Avoid mutating states when testing referential equality
+**Learning:** React state evaluation in `runScanSimulation` is cyclic and triggered every 200ms. If referential equality is broken in `evaluateRung`/`evaluatePath` (e.g., returning new objects even when no changes are made), it cascades into massive React component re-renders.
+**Action:** Be mindful of deep copying and returning new references if there's no state change inside `evaluatePath` and `evaluateRung`. A previous attempt failed build, possibly due to unexpected syntax errors or environment instability, but the idea stands.
