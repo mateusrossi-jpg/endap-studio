@@ -1,0 +1,3 @@
+## 2024-10-18 - Referential Stability in Cyclical Simulations
+**Learning:** In applications with cyclical execution loops (like PLC scans running every 200ms), shallow cloning large objects unconditionally inside loop evaluations creates new memory references, destroying referential equality and triggering massive downstream cascading React re-renders.
+**Action:** Use a lazy-cloning optimization pattern where new object/array references are only allocated when the underlying property values actually change, avoiding unnecessary component updates while maintaining strict immutability conventions.
