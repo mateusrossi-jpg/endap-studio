@@ -47,6 +47,7 @@ export const IntegrationStore: React.FC<IntegrationStoreProps> = ({ integrations
                           type="checkbox" 
                           checked={integration.enabled} 
                           onChange={() => onToggle(integration.id)} 
+                          aria-label={`Ativar integração ${integration.name}`}
                         />
                         <span className={styles.slider}></span>
                       </label>
@@ -66,6 +67,7 @@ export const IntegrationStore: React.FC<IntegrationStoreProps> = ({ integrations
                       className={styles.configButton}
                       onClick={() => onConfigure(integration.id)}
                       disabled={!integration.enabled}
+                      aria-label={`Configurar integração ${integration.name}`}
                     >
                       Configurar
                     </button>

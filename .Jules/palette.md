@@ -1,0 +1,3 @@
+## 2024-05-18 - Missing ARIA labels in custom toggle switches
+**Learning:** The custom toggle switches using `input type="checkbox"` wrapped in `<label>` with an empty `<span class="slider">` lacked `aria-label`s, preventing screen readers from understanding the action. Similarly, some contextual buttons like "Configurar" needed specific labels to be meaningful out of context.
+**Action:** Always verify that interactive elements, especially custom form controls and icon/context-dependent buttons, have descriptive `aria-label`s that use data from the mapped object (e.g., `integration.name`) to provide clear, actionable context for screen reader users.
