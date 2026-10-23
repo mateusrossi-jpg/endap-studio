@@ -571,23 +571,41 @@ export function useStudioController() {
       const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
       let nextMemory = previousMemory;
+
+      let rungsChanged = false;
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
         const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
         nextMemory = result.memory;
+        if (result.rung !== rung) rungsChanged = true;
         return result.rung;
       });
 
-      setMemoryMap(nextMemory);
+      if (nextMemory !== previousMemory) {
+        setMemoryMap(nextMemory);
+      }
 
-      const nextProject = {
-        ...currentProject,
-        updatedAt: new Date().toISOString(),
-        ladderProgram: {
-          ...currentProject.ladderProgram,
-          scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
-          rungs: simulatedRungs
-        }
-      };
+      let nextProject = currentProject;
+
+      if (rungsChanged) {
+        nextProject = {
+          ...currentProject,
+          updatedAt: new Date().toISOString(),
+          ladderProgram: {
+            ...currentProject.ladderProgram,
+            scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
+            rungs: simulatedRungs
+          }
+        };
+      } else {
+        // Just update scan time if no rungs changed to avoid deep re-renders but keep sim running
+        nextProject = {
+          ...currentProject,
+          ladderProgram: {
+            ...currentProject.ladderProgram,
+            scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2))
+          }
+        };
+      }
 
       publishBooleanDiff(previousMemory, nextMemory, createMemoryChangedEvent);
       publishBooleanDiff(previousCoils, collectCoilStates(nextProject), (address, value) => {
