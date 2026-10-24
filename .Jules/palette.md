@@ -1,0 +1,3 @@
+## 2024-05-24 - Accessibility for icon-only buttons
+**Learning:** Decorative elements inside icon-only buttons (such as text icons like "✕" or SVGs) should have aria-hidden="true" applied when aria-labels are present to prevent redundant or confusing screen reader announcements.
+**Action:** Always verify that icon-only buttons have an aria-label and ensure their visual contents are marked hidden from screen readers.
