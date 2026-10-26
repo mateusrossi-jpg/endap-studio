@@ -571,15 +571,18 @@ export function useStudioController() {
       const previousCounters = collectCounterDoneStates(currentProject);
       const previousBranches = collectBranchStates(currentProject);
       let nextMemory = previousMemory;
+      let hasRungChanges = false; // Bolt: Track if any rung changed during evaluation
       const simulatedRungs = currentProject.ladderProgram.rungs.map((rung) => {
         const result = evaluateRung(rung, deltaMs, nextMemory, forceStateRef.current);
         nextMemory = result.memory;
+        if (result.rung !== rung) hasRungChanges = true;
         return result.rung;
       });
 
       setMemoryMap(nextMemory);
 
-      const nextProject = {
+      // Bolt: Only update the project state (triggering React re-renders) if the simulation actually changed logic state
+      const nextProject = (hasRungChanges || nextMemory !== previousMemory) ? {
         ...currentProject,
         updatedAt: new Date().toISOString(),
         ladderProgram: {
@@ -587,7 +590,7 @@ export function useStudioController() {
           scanTimeMs: Number((3.8 + Math.random() * 1.6).toFixed(2)),
           rungs: simulatedRungs
         }
-      };
+      } : currentProject;
 
       publishBooleanDiff(previousMemory, nextMemory, createMemoryChangedEvent);
       publishBooleanDiff(previousCoils, collectCoilStates(nextProject), (address, value) => {
