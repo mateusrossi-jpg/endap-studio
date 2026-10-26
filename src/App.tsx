@@ -44,7 +44,7 @@ function App() {
             <strong>ENDAP Studio</strong>
             <small>Ladder mobile-first</small>
           </div>
-          <button className="mobile-close-btn" onClick={() => setIsMobileMenuOpen(false)}>✕</button>
+          <button aria-label="Fechar menu" className="mobile-close-btn" onClick={() => setIsMobileMenuOpen(false)}><span aria-hidden="true">✕</span></button>
         </div>
 
         <nav className="nav-list">
@@ -69,8 +69,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            <button aria-label="Abrir menu" className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
+              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
             <div>
               <p className="eyebrow">Editor Escada / Automação ENDAP</p>
