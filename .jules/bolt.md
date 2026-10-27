@@ -1,0 +1,3 @@
+## 2025-02-28 - Lazy Cloning in cyclical React state loops
+**Learning:** In applications with cyclical evaluation loops (like 200ms `runScanSimulation` in a RUN mode), unconditionally returning new cloned instances of large object structures (like `MemoryMap`, Rungs, and Blocks) and assigning it to React state causes massive, cascading re-renders, even when nothing actually changed in the logical state of the application.
+**Action:** Always implement explicit deep equality or field-level dirty checking, combined with lazy cloning, when evaluating cyclic runtime states. If state remains logically identical, the original reference must be returned to allow React state updates to be efficiently bailed out or skipped entirely.
